@@ -456,7 +456,7 @@ const CAMPAIGNS = [
   {id:"camp-3",name:"She Unfolds",month:2,tagline:"Every Layer Tells a Story",layer:"campaign"},
   {id:"camp-4",name:"21st Anniversary Launch",month:3,tagline:"",layer:"campaign"},
   {id:"camp-5",name:"Flavours of the World Pop-Up",month:3,tagline:"",layer:"campaign"},
-  {id:"camp-6",name:"Summertime Madness",month:5,tagline:"",layer:"campaign"},
+  {id:"camp-6",name:"Summertime Madness",month:5,endMonth:6,tagline:"",layer:"campaign"},
   {id:"camp-7",name:"Summer Goals",month:5,tagline:"",layer:"campaign"},
   {id:"camp-8",name:"Let's Go Local! / Born & Bred",month:7,tagline:"",layer:"campaign"},
   {id:"camp-9",name:"Oktoberfest",month:8,tagline:"",layer:"campaign"},
@@ -557,10 +557,15 @@ export default function MarketingCalendar() {
     const events = [];
     if (layers.mice) events.push(...MICE_EVENTS);
     if (layers.sg) events.push(...SG_EVENTS);
-    if (layers.campaign) events.push(...CAMPAIGNS.map(c => ({
-      ...c, start: `2026-${String(c.month + 1).padStart(2, "0")}-01`,
-      end: `2026-${String(c.month + 1).padStart(2, "0")}-28`,
-    })));
+    if (layers.campaign) events.push(...CAMPAIGNS.map(c => {
+      const endM = (c.endMonth != null) ? c.endMonth : c.month;
+      const lastDay = new Date(2026, endM + 1, 0).getDate();
+      return {
+        ...c,
+        start: `2026-${String(c.month + 1).padStart(2, "0")}-01`,
+        end: `2026-${String(endM + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+      };
+    }));
     events.push(...customEvents);
     return events;
   }, [layers, customEvents]);
@@ -574,7 +579,12 @@ export default function MarketingCalendar() {
     if (quarter !== "all") {
       const months = QUARTERS[quarter];
       evts = evts.filter(e => {
-        if (e.month !== undefined) return months.includes(e.month);
+        if (e.month !== undefined) {
+          const endM = (e.endMonth != null) ? e.endMonth : e.month;
+          // Multi-month item matches if any of its months is in the quarter
+          for (let m = e.month; m <= endM; m++) if (months.includes(m)) return true;
+          return false;
+        }
         if (e.start) return months.includes(getMonthIndex(e.start));
         return true;
       });
@@ -586,6 +596,12 @@ export default function MarketingCalendar() {
     const map = {};
     for (let i = 0; i < 12; i++) map[i] = [];
     filteredEvents.forEach(e => {
+      // Multi-month campaigns: file under every month they span
+      if (e.layer === "campaign" && e.month !== undefined) {
+        const endM = (e.endMonth != null) ? e.endMonth : e.month;
+        for (let m = e.month; m <= endM; m++) if (map[m]) map[m].push(e);
+        return;
+      }
       const mi = e.month ?? (e.start ? getMonthIndex(e.start) : 0);
       if (map[mi]) map[mi].push(e);
     });
