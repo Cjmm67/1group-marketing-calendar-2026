@@ -306,8 +306,8 @@ function parseVenueData(venueKey) {
   return result;
 }
 
-// Group-level data for board/month views
-const DAILY_HC = parseVenueData("group");
+// Note: hot/cold data is zone-aware. Each view receives `activeHC` from the main component
+// based on the currently-selected zone (group or a specific outlet).
 
 // ─── MICE EVENTS ───
 const MICE_EVENTS = [
@@ -467,10 +467,10 @@ const CAMPAIGNS = [
 // ─── COLOURS ───
 
 const LAYER_COLORS = {
-  "hot-hot": { primary: "#DC2626", bg: "#FECACA", text: "#fff", label: "Hot-Hot" },
-  "hot": { primary: "#F59E0B", bg: "#FEF3C7", text: "#fff", label: "Hot" },
-  "cold": { primary: "#60A5FA", bg: "#DBEAFE", text: "#fff", label: "Cold" },
-  "cold-cold": { primary: "#1E40AF", bg: "#BFDBFE", text: "#fff", label: "Cold-Cold" },
+  "hot-hot": { primary: "#DC2626", bg: "#FECACA", soft: "#FCA5A5", text: "#fff", label: "Hot-Hot" },
+  "hot": { primary: "#F59E0B", bg: "#FEF3C7", soft: "#FCD34D", text: "#fff", label: "Hot" },
+  "cold": { primary: "#60A5FA", bg: "#DBEAFE", soft: "#BAE6FD", text: "#fff", label: "Cold" },
+  "cold-cold": { primary: "#1E40AF", bg: "#BFDBFE", soft: "#93C5FD", text: "#fff", label: "Cold-Cold" },
   mice: { primary: "#8B5CF6", bg: "#EDE9FE", text: "#fff" },
   sg: { primary: "#D97706", bg: "#FED7AA", text: "#000" },
   visitor: { primary: "#10B981", bg: "#D1FAE5", text: "#fff" },
@@ -511,10 +511,13 @@ export default function MarketingCalendar() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showVisitors, setShowVisitors] = useState(false);
-  const [selectedVenue, setSelectedVenue] = useState("group"); // heatmap venue
+  const [selectedZone, setSelectedZone] = useState("group"); // "group" or a venue key
   const [loaded, setLoaded] = useState(false);
 
   const t = T;
+
+  const activeHC = useMemo(() => parseVenueData(selectedZone), [selectedZone]);
+  const activeVenue = VENUE_HC_RAW[selectedZone];
 
   useEffect(() => {
     (async () => {
@@ -527,7 +530,8 @@ export default function MarketingCalendar() {
           if (p.layers) setLayers(p.layers);
           if (p.view) setView(p.view);
           if (p.quarter) setQuarter(p.quarter);
-          if (p.venue) setSelectedVenue(p.venue);
+          if (p.zone && VENUE_HC_RAW[p.zone]) setSelectedZone(p.zone);
+          else if (p.venue && VENUE_HC_RAW[p.venue]) setSelectedZone(p.venue); // legacy
         }
       } catch (e) { /* first load */ }
       setLoaded(true);
@@ -539,14 +543,14 @@ export default function MarketingCalendar() {
     try { await storage.set("calendar-events", JSON.stringify(evts)); } catch {}
   }, []);
 
-  const savePrefs = useCallback(async (l, v, q, ven) => {
-    try { await storage.set("calendar-settings", JSON.stringify({ layers: l, view: v, quarter: q, venue: ven })); } catch {}
+  const savePrefs = useCallback(async (l, v, q, z) => {
+    try { await storage.set("calendar-settings", JSON.stringify({ layers: l, view: v, quarter: q, zone: z })); } catch {}
   }, []);
 
   const toggleLayer = (key) => {
     const next = { ...layers, [key]: !layers[key] };
     setLayers(next);
-    savePrefs(next, view, quarter, selectedVenue);
+    savePrefs(next, view, quarter, selectedZone);
   };
 
   const allEvents = useMemo(() => {
@@ -592,8 +596,8 @@ export default function MarketingCalendar() {
     const miceCount = MICE_EVENTS.length;
     const sgCount = SG_EVENTS.length;
     const campCount = CAMPAIGNS.length;
-    const hhDays = Object.values(DAILY_HC).filter(d => d.rating === "hot-hot").length;
-    const ccDays = Object.values(DAILY_HC).filter(d => d.rating === "cold-cold").length;
+    const hhDays = Object.values(activeHC).filter(d => d.rating === "hot-hot").length;
+    const ccDays = Object.values(activeHC).filter(d => d.rating === "cold-cold").length;
     let busiest = 0, quietest = 0, bMax = 0, qMin = 999;
     for (let i = 0; i < 12; i++) {
       const count = (eventsByMonth[i] || []).length;
@@ -601,7 +605,7 @@ export default function MarketingCalendar() {
       if (count < qMin) { qMin = count; quietest = i; }
     }
     return { miceCount, sgCount, campCount, hhDays, ccDays, busiest, quietest, custom: customEvents.length };
-  }, [eventsByMonth, customEvents]);
+  }, [eventsByMonth, customEvents, activeHC]);
 
   const handleReset = async () => {
     if (!confirm("Reset all custom events and preferences?")) return;
@@ -610,7 +614,7 @@ export default function MarketingCalendar() {
     setLayers({ hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true });
     setView("board");
     setQuarter("all");
-    setSelectedVenue("group");
+    setSelectedZone("group");
   };
 
   const addEvent = (evt) => {
@@ -654,8 +658,14 @@ export default function MarketingCalendar() {
         <div className="px-4 py-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h1 className="text-xl font-bold tracking-tight" style={{ background: t.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>1-Group Marketing Calendar 2026</h1>
-              <p className={`text-xs ${t.tagline} mt-0.5`}>Master Calendar · Demand · Events · Opportunities</p>
+              <h1 className="text-xl font-bold tracking-tight" style={{ background: t.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                {selectedZone === "group" ? "1-Group Marketing Calendar 2026" : `${activeVenue.name} · Marketing Calendar 2026`}
+              </h1>
+              <p className={`text-xs ${t.tagline} mt-0.5`}>
+                {selectedZone === "group"
+                  ? "Zone 1 · Group-level calendar, demand & opportunities"
+                  : `Zone 2 · Outlet view · demand overlaid with group events & visitors`}
+              </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
@@ -668,17 +678,41 @@ export default function MarketingCalendar() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+          {/* Zone selector: Group + outlet tabs */}
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${t.textDim} mr-1`}>Zone:</span>
+            {VENUE_KEYS.map(zkey => {
+              const v = VENUE_HC_RAW[zkey];
+              const isSel = selectedZone === zkey;
+              const isGrp = zkey === "group";
+              return (
+                <button
+                  key={zkey}
+                  onClick={() => { setSelectedZone(zkey); savePrefs(layers, view, quarter, zkey); }}
+                  className={`text-xs px-3 py-1 rounded-md transition-all flex items-center gap-1 ${
+                    isSel
+                      ? isGrp ? "bg-purple-600 text-white ring-2 ring-purple-400" : "bg-indigo-600 text-white ring-2 ring-indigo-400"
+                      : t.inactive
+                  }`}
+                >
+                  {isGrp ? <Thermometer className="w-3 h-3" /> : <Building2 className="w-3 h-3" />}
+                  {v.shortName}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
             <div className="flex gap-1">
               {[["board", "Board", Grid3X3], ["month", "Month", Calendar], ["heatmap", "Heatmap", BarChart3]].map(([v, label, Icon]) => (
-                <button key={v} onClick={() => { setView(v); savePrefs(layers, v, quarter, selectedVenue); }} className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-md ${view === v ? "bg-purple-600 text-white" : t.inactive}`}>
+                <button key={v} onClick={() => { setView(v); savePrefs(layers, v, quarter, selectedZone); }} className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-md ${view === v ? "bg-purple-600 text-white" : t.inactive}`}>
                   <Icon className="w-3.5 h-3.5" />{label}
                 </button>
               ))}
             </div>
             <div className="flex gap-1">
               {["all", "q1", "q2", "q3", "q4"].map(q => (
-                <button key={q} onClick={() => { setQuarter(q); savePrefs(layers, view, q, selectedVenue); }} className={`text-xs px-3 py-1.5 rounded-md ${quarter === q ? "bg-indigo-600 text-white" : t.inactive}`}>
+                <button key={q} onClick={() => { setQuarter(q); savePrefs(layers, view, q, selectedZone); }} className={`text-xs px-3 py-1.5 rounded-md ${quarter === q ? "bg-indigo-600 text-white" : t.inactive}`}>
                   {q === "all" ? "All" : q.toUpperCase()}
                 </button>
               ))}
@@ -707,6 +741,41 @@ export default function MarketingCalendar() {
               <Users className="w-3 h-3" /> Visitor Map
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Zone selector: Group (Zone 1) vs individual outlets (Zone 2) */}
+      <div className="px-4 pt-3">
+        <div className={`${t.panel} border rounded-xl p-2 flex items-center gap-2 flex-wrap`}>
+          <div className="flex items-center gap-1.5 pl-1 pr-2">
+            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+            <span className={`text-xs font-semibold ${t.textMuted}`}>Zone</span>
+          </div>
+          {VENUE_KEYS.map(vkey => {
+            const v = VENUE_HC_RAW[vkey];
+            const isSel = selectedZone === vkey;
+            const isGrp = vkey === "group";
+            return (
+              <button
+                key={vkey}
+                onClick={() => { setSelectedZone(vkey); savePrefs(layers, view, quarter, vkey); }}
+                className={`text-xs px-2.5 py-1 rounded-md transition-all whitespace-nowrap ${
+                  isSel
+                    ? (isGrp ? "bg-purple-600 text-white" : "bg-indigo-600 text-white")
+                    : t.inactive
+                }`}
+                title={v.name}
+              >
+                {isGrp && <Thermometer className="w-3 h-3 inline mr-1 -mt-0.5" />}
+                {isGrp ? "1-Group" : v.shortName}
+              </button>
+            );
+          })}
+          {selectedZone !== "group" && (
+            <span className={`ml-auto text-xs ${t.textDim} italic pr-2`}>
+              Showing {activeVenue.name} demand · Events, visitors & holidays unchanged
+            </span>
+          )}
         </div>
       </div>
 
@@ -759,12 +828,12 @@ export default function MarketingCalendar() {
       )}
 
       <div className="p-4">
-        {view === "board" && <BoardView t={t} eventsByMonth={eventsByMonth} layers={layers} quarter={quarter} onDetail={setDetailItem} onMonthClick={(mi) => { setSelectedMonth(mi); setView("month"); }} />}
-        {view === "month" && <MonthView t={t} month={selectedMonth} setMonth={setSelectedMonth} events={eventsByMonth[selectedMonth] || []} layers={layers} onDetail={setDetailItem} />}
-        {view === "heatmap" && <HeatmapView t={t} layers={layers} quarter={quarter} onDetail={setDetailItem} selectedVenue={selectedVenue} setSelectedVenue={(v) => { setSelectedVenue(v); savePrefs(layers, view, quarter, v); }} />}
+        {view === "board" && <BoardView t={t} activeHC={activeHC} activeVenue={activeVenue} eventsByMonth={eventsByMonth} layers={layers} quarter={quarter} onDetail={setDetailItem} onMonthClick={(mi) => { setSelectedMonth(mi); setView("month"); }} />}
+        {view === "month" && <MonthView t={t} activeHC={activeHC} month={selectedMonth} setMonth={setSelectedMonth} events={eventsByMonth[selectedMonth] || []} layers={layers} onDetail={setDetailItem} />}
+        {view === "heatmap" && <HeatmapView t={t} activeHC={activeHC} activeVenue={activeVenue} layers={layers} quarter={quarter} onDetail={setDetailItem} />}
       </div>
 
-      {detailItem && <DetailPanel t={t} item={detailItem} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
+      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
 
       {(showAddForm || editingEvent) && (
         <EventFormModal
@@ -780,7 +849,7 @@ export default function MarketingCalendar() {
 
 // ─── BOARD VIEW ───
 
-function BoardView({ t, eventsByMonth, layers, quarter, onDetail, onMonthClick }) {
+function BoardView({ t, activeHC, activeVenue, eventsByMonth, layers, quarter, onDetail, onMonthClick }) {
   const quarters = quarter === "all" ? ["q1", "q2", "q3", "q4"] : [quarter];
   const isDay = t.name === "day";
   return (
@@ -793,7 +862,7 @@ function BoardView({ t, eventsByMonth, layers, quarter, onDetail, onMonthClick }
           <div className={`divide-y ${t.divide}`}>
             {QUARTERS[q].map(mi => {
               const evts = eventsByMonth[mi] || [];
-              const hc = DAILY_HC;
+              const hc = activeHC;
               const days = daysInMonth(mi);
               let hhCount = 0, hCount = 0, cCount = 0, ccCount = 0;
               for (let d = 1; d <= days; d++) {
@@ -883,7 +952,7 @@ function EventChip({ t, event, onClick }) {
 
 // ─── MONTH VIEW ───
 
-function MonthView({ t, month, setMonth, events, layers, onDetail }) {
+function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
   const days = daysInMonth(month);
   const startDay = firstDayOfMonth(month);
   const offset = startDay === 0 ? 6 : startDay - 1;
@@ -928,11 +997,11 @@ function MonthView({ t, month, setMonth, events, layers, onDetail }) {
         {Array.from({ length: days }).map((_, i) => {
           const d = i + 1;
           const key = dateStr(month, d);
-          const hc = DAILY_HC[key];
+          const hc = activeHC[key];
           const ph = isPublicHoliday(key);
           const sh = isSchoolHoliday(key);
           const evts = dayEvents[d] || [];
-          const ratingColor = hc ? LAYER_COLORS[hc.rating]?.primary + (isDay ? "30" : "25") : "transparent";
+          const ratingColor = hc && LAYER_COLORS[hc.rating] ? LAYER_COLORS[hc.rating].soft || LAYER_COLORS[hc.rating].primary + "30" : "transparent";
 
           return (
             <div key={d} className={`min-h-20 ${t.panel} border rounded-lg p-1 ${t.borderHover} transition-colors cursor-pointer relative`}
@@ -977,15 +1046,14 @@ function MonthView({ t, month, setMonth, events, layers, onDetail }) {
   );
 }
 
-// ─── HEATMAP VIEW (UPGRADED WITH VENUE SELECTOR) ───
+// ─── HEATMAP VIEW ───
 
-function HeatmapView({ t, layers, quarter, onDetail, selectedVenue, setSelectedVenue }) {
+function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
   const months = quarter === "all" ? [...Array(12).keys()] : QUARTERS[quarter];
   const isDay = t.name === "day";
 
-  const venueHC = useMemo(() => parseVenueData(selectedVenue), [selectedVenue]);
-  const venue = VENUE_HC_RAW[selectedVenue];
-  const isGroup = selectedVenue === "group";
+  const venueHC = activeHC;
+  const venue = activeVenue;
 
   const legendRatings = ["hot-hot", "hot", "cold", "cold-cold"];
 
@@ -993,39 +1061,13 @@ function HeatmapView({ t, layers, quarter, onDetail, selectedVenue, setSelectedV
 
   return (
     <div>
-      {/* Venue selector */}
+      {/* Zone summary strip */}
       <div className={`mb-4 p-3 ${t.panel} border rounded-xl`}>
-        <div className="flex items-center gap-2 mb-2">
-          <Building2 className={`w-4 h-4 ${isDay ? "text-indigo-600" : "text-indigo-400"}`} />
-          <h3 className={`text-sm font-bold ${isDay ? "text-indigo-700" : "text-indigo-400"}`}>Heatmap By Venue</h3>
-          <span className={`text-xs ${t.textDim}`}>· Master Calendar 2026</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {VENUE_KEYS.map(vkey => {
-            const v = VENUE_HC_RAW[vkey];
-            const isSel = selectedVenue === vkey;
-            const isGrp = vkey === "group";
-            return (
-              <button
-                key={vkey}
-                onClick={() => setSelectedVenue(vkey)}
-                className={`text-xs px-3 py-1.5 rounded-md transition-all ${
-                  isSel
-                    ? isGrp ? "bg-purple-600 text-white ring-2 ring-purple-400" : "bg-indigo-600 text-white ring-2 ring-indigo-400"
-                    : t.inactive
-                }`}
-              >
-                {isGrp && <Thermometer className="w-3 h-3 inline mr-1" />}
-                {v.shortName}
-                {isSel && <span className="ml-1 opacity-70">({summary.hh + summary.h} hot)</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div className={`mt-3 pt-3 border-t ${t.border} flex flex-wrap items-center gap-3 text-xs`}>
-          <div className={t.textMuted}>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-indigo-600" />
             <span className={`font-semibold ${t.textHead}`}>{venue.name}</span>
-            {venue.description && <span className={`${t.textDim} ml-2`}>· {venue.description}</span>}
+            {venue.description && venue.description !== venue.name && <span className={`${t.textDim}`}>· {venue.description}</span>}
           </div>
           <div className="flex gap-2 ml-auto flex-wrap">
             {summary.hh > 0 && <span className="px-2 py-0.5 rounded" style={{ background: "#DC2626", color: "#fff" }}>{summary.hh} Hot-Hot</span>}
@@ -1117,14 +1159,14 @@ function HeatmapView({ t, layers, quarter, onDetail, selectedVenue, setSelectedV
 
 // ─── DETAIL PANEL ───
 
-function DetailPanel({ t, item, onClose, onEdit, onDelete }) {
+function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
   const layer = item.layer || "sg";
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
   const isCustom = item.id?.startsWith("custom-");
   const isDateAnchor = item.isDateAnchor === true;
   const mi = item.month ?? (item.start ? getMonthIndex(item.start) : 0);
   const peaks = getVisitorPeaks(mi);
-  const hcInfo = item.start ? DAILY_HC[item.start] : null;
+  const hcInfo = item.start ? activeHC[item.start] : null;
   const phOnDate = item.start ? isPublicHoliday(item.start) : null;
   const shOnDate = item.start ? isSchoolHoliday(item.start) : false;
   const isDay = t.name === "day";
