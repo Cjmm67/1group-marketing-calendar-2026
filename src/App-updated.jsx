@@ -1,5 +1,67 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer } from "lucide-react";
+import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer, Lock, LogOut, Shield, KeyRound, User as UserIcon, AlertCircle } from "lucide-react";
+
+// ─── AUTH: USERS + ACCESS CODES ───
+// NOTE: Client-side soft gate only. Anyone with DevTools can read this file.
+// Protects against casual access, not determined attackers. For true auth,
+// use Vercel's Workspace-domain protection or a server-side OAuth flow.
+
+const AUTH_USERS = {
+  // Master admin
+  "chris.millar@1-group.sg": { role: "master", name: "Chris Millar", dept: "Leadership" },
+  // Marketing — can edit
+  "guiying.chua@1-group.sg": { role: "admin", name: "Guiying Chua", dept: "Marketing" },
+  "praveena.gunasegaran@1-group.sg": { role: "admin", name: "Praveena Gunasegaran", dept: "Marketing" },
+  "immelia.izalena@1-group.sg": { role: "admin", name: "Immelia Izalena", dept: "Marketing" },
+  "jessie.tan@1-group.sg": { role: "admin", name: "Jessie Tan", dept: "Marketing" },
+  "audrey.ng@1-group.sg": { role: "admin", name: "Audrey Ng", dept: "Marketing" },
+  "daryl.xie@1-group.sg": { role: "admin", name: "Daryl Xie", dept: "Marketing" },
+  // Sales — can edit
+  "eileen.tan@1-group.sg": { role: "admin", name: "Eileen Tan", dept: "Sales" },
+  "janet.sim@1-group.sg": { role: "admin", name: "Janet Sim", dept: "Sales" },
+  "alvin.chua@1-group.sg": { role: "admin", name: "Alvin Chua", dept: "Sales" },
+  // Operations — read-only
+  "joseph.ong@1-group.sg": { role: "staff", name: "Joseph Ong", dept: "Operations" },
+  "massimo.aquaro@1-group.sg": { role: "staff", name: "Massimo Aquaro", dept: "Operations" },
+  "alessandro.rosa@1-group.sg": { role: "staff", name: "Alessandro Rosa", dept: "Operations" },
+  "davide.carella@1-group.sg": { role: "staff", name: "Davide Carella", dept: "Operations" },
+  "kumar.k@1-group.sg": { role: "staff", name: "Kumar K", dept: "Operations" },
+  "ruzaini.hashim@1-group.sg": { role: "staff", name: "Ruzaini Hashim", dept: "Operations" },
+  // Culinary — read-only
+  "tom.kung@1-group.sg": { role: "staff", name: "Tom Kung", dept: "Culinary" },
+  "felix.chong@1-group.sg": { role: "staff", name: "Felix Chong", dept: "Culinary" },
+};
+
+// Static per-venue access codes. Admins share these with outlet staff.
+const VENUE_ACCESS_CODES = {
+  summerhouse: "SMH-2026-X7K2",
+  garage: "GAR-2026-M9P4",
+  altitude: "ALT-2026-R3N8",
+  arden: "ARD-2026-J5T1",
+  alkaff: "ALK-2026-H2W6",
+  alfaro: "ALF-2026-B4Y9",
+  atico: "ATI-2026-D6Q3",
+  riverhouse: "RIV-2026-F8V5",
+  flowerhill: "FLW-2026-L1K7",
+  monti: "MON-2026-C3S2",
+};
+
+function authEmail(raw) {
+  const email = (raw || "").trim().toLowerCase();
+  if (!email.endsWith("@1-group.sg")) return null;
+  return AUTH_USERS[email] ? { email, ...AUTH_USERS[email] } : null;
+}
+
+function authVenueCode(venueKey, code) {
+  const c = (code || "").trim().toUpperCase();
+  if (!VENUE_ACCESS_CODES[venueKey]) return null;
+  if (VENUE_ACCESS_CODES[venueKey] !== c) return null;
+  return { role: "venue", venue: venueKey, name: `${VENUE_HC_RAW[venueKey]?.name || venueKey} Staff`, dept: "Outlet" };
+}
+
+function canEdit(user) { return user && (user.role === "master" || user.role === "admin"); }
+function canSeeAllZones(user) { return user && user.role !== "venue"; }
+function canSeeVenueCodes(user) { return user && (user.role === "master" || user.role === "admin"); }
 
 // ─── STORAGE WRAPPER (localStorage for Vercel) ───
 const storage = {
@@ -512,9 +574,18 @@ export default function MarketingCalendar() {
   const [showStats, setShowStats] = useState(false);
   const [showVisitors, setShowVisitors] = useState(false);
   const [selectedZone, setSelectedZone] = useState("group"); // "group" or a venue key
+  const [user, setUser] = useState(null); // { email?, role, name, dept, venue? }
+  const [showVenueCodes, setShowVenueCodes] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const t = T;
+
+  // If a venue-only user is signed in, force their zone
+  useEffect(() => {
+    if (user?.role === "venue" && user.venue && selectedZone !== user.venue) {
+      setSelectedZone(user.venue);
+    }
+  }, [user, selectedZone]);
 
   const activeHC = useMemo(() => parseVenueData(selectedZone), [selectedZone]);
   const activeVenue = VENUE_HC_RAW[selectedZone];
@@ -522,6 +593,18 @@ export default function MarketingCalendar() {
   useEffect(() => {
     (async () => {
       try {
+        // Restore session
+        const sess = await storage.get("calendar-user");
+        if (sess?.value) {
+          const u = JSON.parse(sess.value);
+          // Re-validate against current allowlist
+          if (u.email && AUTH_USERS[u.email]) {
+            setUser({ email: u.email, ...AUTH_USERS[u.email] });
+          } else if (u.role === "venue" && u.venue && VENUE_HC_RAW[u.venue]) {
+            setUser(u);
+            setSelectedZone(u.venue);
+          }
+        }
         const saved = await storage.get("calendar-events");
         if (saved?.value) setCustomEvents(JSON.parse(saved.value));
         const prefs = await storage.get("calendar-settings");
@@ -536,6 +619,18 @@ export default function MarketingCalendar() {
       } catch (e) { /* first load */ }
       setLoaded(true);
     })();
+  }, []);
+
+  const handleSignIn = useCallback(async (u) => {
+    setUser(u);
+    try { await storage.set("calendar-user", JSON.stringify(u)); } catch {}
+    if (u.role === "venue" && u.venue) setSelectedZone(u.venue);
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    setUser(null);
+    try { await storage.delete("calendar-user"); } catch {}
+    setSelectedZone("group");
   }, []);
 
   const saveEvents = useCallback(async (evts) => {
@@ -668,6 +763,13 @@ export default function MarketingCalendar() {
 
   if (!loaded) return <div className={`flex items-center justify-center h-screen ${t.page}`}><div className="animate-pulse text-lg">Loading calendar...</div></div>;
 
+  if (!user) return <SignIn t={t} onSignIn={handleSignIn} />;
+
+  const editOK = canEdit(user);
+  const allZonesOK = canSeeAllZones(user);
+  const codesOK = canSeeVenueCodes(user);
+  const visibleVenueKeys = allZonesOK ? VENUE_KEYS : [user.venue];
+
   return (
     <div className={`min-h-screen ${t.page}`} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <div className={`sticky top-0 z-40 border-b ${t.headerBorder}`} style={{ background: t.headerBg }}>
@@ -684,20 +786,34 @@ export default function MarketingCalendar() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {/* User badge */}
+              <div className={`flex items-center gap-1.5 ${t.surface} px-2.5 py-1 rounded-md text-xs ${t.textBody}`} title={user.email || user.venue}>
+                {user.role === "master" ? <Shield className="w-3.5 h-3.5 text-purple-600" /> :
+                 user.role === "admin" ? <Shield className="w-3.5 h-3.5 text-indigo-600" /> :
+                 user.role === "venue" ? <Building2 className="w-3.5 h-3.5 text-amber-600" /> :
+                 <UserIcon className="w-3.5 h-3.5 text-slate-500" />}
+                <span className="font-medium">{user.name}</span>
+                <span className={t.textDim}>· {user.dept}</span>
+                {!editOK && <span className="text-xs px-1.5 py-0 rounded bg-slate-200 text-slate-700">Read-only</span>}
+              </div>
+
               <div className="relative">
                 <Search className={`absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textDim}`} />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search events..." className={`${t.input} border rounded-md pl-7 pr-3 py-1.5 text-xs w-44 focus:outline-none focus:border-purple-500`} />
               </div>
-              <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-md"><Plus className="w-3.5 h-3.5" /> Add</button>
+              {editOK && <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-md"><Plus className="w-3.5 h-3.5" /> Add</button>}
               <button onClick={copySummary} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><Copy className="w-3.5 h-3.5" /> Copy</button>
-              <button onClick={handleReset} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><RotateCcw className="w-3.5 h-3.5" /> Reset</button>
+              {codesOK && <button onClick={() => setShowVenueCodes(true)} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><KeyRound className="w-3.5 h-3.5" /> Venue Codes</button>}
+              {editOK && <button onClick={handleReset} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><RotateCcw className="w-3.5 h-3.5" /> Reset</button>}
+              <button onClick={handleSignOut} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><LogOut className="w-3.5 h-3.5" /> Sign out</button>
             </div>
           </div>
 
-          {/* Zone selector: Group + outlet tabs */}
+          {/* Zone selector: Group + outlet tabs (hidden for venue-only users) */}
+          {allZonesOK && (
           <div className="flex items-center gap-1.5 mt-3 flex-wrap">
             <span className={`text-xs font-semibold uppercase tracking-wider ${t.textDim} mr-1`}>Zone:</span>
-            {VENUE_KEYS.map(zkey => {
+            {visibleVenueKeys.map(zkey => {
               const v = VENUE_HC_RAW[zkey];
               const isSel = selectedZone === zkey;
               const isGrp = zkey === "group";
@@ -717,6 +833,7 @@ export default function MarketingCalendar() {
               );
             })}
           </div>
+          )}
 
           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
             <div className="flex gap-1">
@@ -849,9 +966,9 @@ export default function MarketingCalendar() {
         {view === "heatmap" && <HeatmapView t={t} activeHC={activeHC} activeVenue={activeVenue} layers={layers} quarter={quarter} onDetail={setDetailItem} />}
       </div>
 
-      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
+      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} editOK={editOK} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
 
-      {(showAddForm || editingEvent) && (
+      {editOK && (showAddForm || editingEvent) && (
         <EventFormModal
           t={t}
           event={editingEvent}
@@ -859,6 +976,8 @@ export default function MarketingCalendar() {
           onClose={() => { setShowAddForm(false); setEditingEvent(null); }}
         />
       )}
+
+      {showVenueCodes && codesOK && <VenueCodesPanel t={t} onClose={() => setShowVenueCodes(false)} />}
     </div>
   );
 }
@@ -1187,7 +1306,7 @@ function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
 
 // ─── DETAIL PANEL ───
 
-function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
+function DetailPanel({ t, activeHC, item, editOK, onClose, onEdit, onDelete }) {
   const layer = item.layer || "sg";
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
   const isCustom = item.id?.startsWith("custom-");
@@ -1340,7 +1459,7 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
             </div>
           )}
 
-          {isCustom && (
+          {isCustom && editOK && (
             <div className="flex gap-2 pt-2">
               <button onClick={() => onEdit(item)} className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded-md flex-1"><Edit className="w-3.5 h-3.5" /> Edit</button>
               <button onClick={() => onDelete(item.id)} className="flex items-center gap-1 bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-2 rounded-md flex-1"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
@@ -1393,6 +1512,203 @@ function EventFormModal({ t, event, onSave, onClose }) {
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className={`flex-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-sm py-2 rounded-md`}>Cancel</button>
           <button onClick={handleSubmit} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-sm py-2 rounded-md flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" /> Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SIGN-IN PAGE ───
+
+function SignIn({ t, onSignIn }) {
+  const [mode, setMode] = useState("email"); // 'email' or 'venue'
+  const [email, setEmail] = useState("");
+  const [venueKey, setVenueKey] = useState("summerhouse");
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleEmail = () => {
+    setErr(null);
+    const u = authEmail(email);
+    if (!u) {
+      if (!email.toLowerCase().endsWith("@1-group.sg")) setErr("Only @1-group.sg email addresses are accepted.");
+      else setErr("This email is not on the access list. Contact Chris Millar or a Marketing admin.");
+      return;
+    }
+    setBusy(true);
+    onSignIn(u);
+  };
+
+  const handleVenue = () => {
+    setErr(null);
+    const u = authVenueCode(venueKey, code);
+    if (!u) {
+      setErr("Invalid access code for this outlet. Contact a Marketing admin for the current code.");
+      return;
+    }
+    setBusy(true);
+    onSignIn(u);
+  };
+
+  const onKey = (fn) => (e) => { if (e.key === "Enter") fn(); };
+
+  return (
+    <div className={`min-h-screen ${t.page} flex items-center justify-center p-4`} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className="w-full max-w-md">
+        {/* Branding */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-1" style={{ background: t.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            1-Group Marketing Calendar
+          </h1>
+          <p className={`text-sm ${t.tagline}`}>2026 Edition · Demand · Events · Opportunities</p>
+        </div>
+
+        {/* Card */}
+        <div className={`${t.panel} border rounded-xl p-6 shadow-sm`}>
+          <div className="flex items-center gap-2 mb-4">
+            <Lock className={`w-4 h-4 ${t.textMuted}`} />
+            <h2 className={`text-sm font-semibold ${t.textHead}`}>Sign in to continue</h2>
+          </div>
+
+          {/* Mode toggle */}
+          <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-md">
+            <button
+              onClick={() => { setMode("email"); setErr(null); }}
+              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${mode === "email" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
+            >
+              <Shield className="w-3.5 h-3.5" /> 1-Group Employee
+            </button>
+            <button
+              onClick={() => { setMode("venue"); setErr(null); }}
+              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${mode === "venue" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
+            >
+              <Building2 className="w-3.5 h-3.5" /> Outlet Staff
+            </button>
+          </div>
+
+          {mode === "email" ? (
+            <>
+              <p className={`text-xs ${t.textMuted} mb-3 leading-relaxed`}>
+                For all <strong>admins</strong> (Leadership, Marketing, Sales) and <strong>staff</strong> (Operations, Culinary). Your role is assigned automatically from your email address.
+              </p>
+              <label className={`text-xs ${t.textMuted} block mb-1`}>1-Group email address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={onKey(handleEmail)}
+                placeholder="firstname.lastname@1-group.sg"
+                autoFocus
+                className={`w-full ${t.input} border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-purple-500 mb-3`}
+              />
+              <button
+                onClick={handleEmail}
+                disabled={busy}
+                className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm py-2 rounded-md font-medium flex items-center justify-center gap-2"
+              >
+                <Shield className="w-4 h-4" /> Sign in
+              </button>
+              <p className={`text-xs ${t.textDim} mt-3 text-center`}>
+                Not on the list? Contact Chris Millar or a Marketing admin.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`text-xs ${t.textMuted} mb-3 leading-relaxed`}>
+                For outlet-based team members without a 1-Group email. The Marketing team will share a code for your outlet.
+              </p>
+              <label className={`text-xs ${t.textMuted} block mb-1`}>Your outlet</label>
+              <select
+                value={venueKey}
+                onChange={e => setVenueKey(e.target.value)}
+                className={`w-full ${t.input} border rounded-md px-3 py-2 text-sm mb-3`}
+              >
+                {Object.keys(VENUE_ACCESS_CODES).map(k => (
+                  <option key={k} value={k}>{VENUE_HC_RAW[k]?.name || k}</option>
+                ))}
+              </select>
+              <label className={`text-xs ${t.textMuted} block mb-1`}>Access code</label>
+              <input
+                type="text"
+                value={code}
+                onChange={e => setCode(e.target.value.toUpperCase())}
+                onKeyDown={onKey(handleVenue)}
+                placeholder="XXX-2026-XXXX"
+                className={`w-full ${t.input} border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-purple-500 mb-3 font-mono tracking-wider`}
+              />
+              <button
+                onClick={handleVenue}
+                disabled={busy}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm py-2 rounded-md font-medium flex items-center justify-center gap-2"
+              >
+                <KeyRound className="w-4 h-4" /> Enter outlet view
+              </button>
+              <p className={`text-xs ${t.textDim} mt-3 text-center`}>
+                Codes are provided by the Marketing team.
+              </p>
+            </>
+          )}
+
+          {err && (
+            <div className="mt-3 flex items-start gap-2 p-2.5 rounded bg-red-50 border border-red-200 text-xs text-red-800">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>{err}</span>
+            </div>
+          )}
+        </div>
+
+        <p className={`text-xs ${t.textDim} text-center mt-6`}>
+          Internal tool · 1-Group Singapore
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── VENUE CODES PANEL (admins only) ───
+
+function VenueCodesPanel({ t, onClose }) {
+  const [copied, setCopied] = useState(null);
+  const copyCode = (code) => {
+    try { navigator.clipboard.writeText(code); setCopied(code); setTimeout(() => setCopied(null), 1200); } catch {}
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className={`absolute inset-0 ${t.overlayBg}`} />
+      <div className={`relative ${t.panel} border rounded-xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-xl`} onClick={e => e.stopPropagation()}>
+        <div className={`sticky top-0 ${t.panel} border-b p-4 flex items-center justify-between z-10`}>
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-indigo-600" />
+            <h3 className={`font-bold text-sm ${t.textHead}`}>Outlet Access Codes</h3>
+          </div>
+          <button onClick={onClose} className={`p-1 rounded-lg ${t.surfaceHover}`}><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-4 space-y-2">
+          <p className={`text-xs ${t.textMuted} mb-3`}>
+            Share these codes with outlet staff so they can sign in via the <strong>Outlet</strong> tab.
+            Each code grants access to that outlet's calendar view only (read-only).
+          </p>
+          {Object.entries(VENUE_ACCESS_CODES).map(([vkey, code]) => {
+            const v = VENUE_HC_RAW[vkey];
+            return (
+              <div key={vkey} className={`flex items-center justify-between p-3 rounded-lg border ${t.border}`}>
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-indigo-500" />
+                  <span className={`text-sm font-medium ${t.textBody}`}>{v?.name || vkey}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded tracking-wider">{code}</code>
+                  <button
+                    onClick={() => copyCode(code)}
+                    className={`text-xs px-2 py-1 rounded ${copied === code ? "bg-emerald-100 text-emerald-700" : `${t.surfaceStrong} ${t.surfaceStrongHover}`} flex items-center gap-1`}
+                  >
+                    {copied === code ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
