@@ -477,8 +477,11 @@ const PUBLIC_HOLIDAYS = [
   {name:"Labour Day",date:"2026-05-01"},
   {name:"Hari Raya Haji",date:"2026-05-27"},
   {name:"Vesak Day",date:"2026-05-31"},
+  {name:"Vesak Day (observed)",date:"2026-06-01"},
   {name:"National Day",date:"2026-08-09"},
+  {name:"National Day (observed)",date:"2026-08-10"},
   {name:"Deepavali",date:"2026-11-08"},
+  {name:"Deepavali (observed)",date:"2026-11-09"},
   {name:"Christmas Day",date:"2026-12-25"},
 ];
 
@@ -806,7 +809,7 @@ export default function MarketingCalendar() {
       <div className="p-4">
         {view === "board" && <BoardView t={t} eventsByMonth={eventsByMonth} layers={layers} quarter={quarter} onDetail={setDetailItem} onMonthClick={(mi) => { setSelectedMonth(mi); setView("month"); }} />}
         {view === "month" && <MonthView t={t} month={selectedMonth} setMonth={setSelectedMonth} events={eventsByMonth[selectedMonth] || []} layers={layers} onDetail={setDetailItem} />}
-        {view === "heatmap" && <HeatmapView t={t} layers={layers} quarter={quarter} selectedVenue={selectedVenue} setSelectedVenue={(v) => { setSelectedVenue(v); savePrefs(layers, view, quarter, v, theme); }} />}
+        {view === "heatmap" && <HeatmapView t={t} layers={layers} quarter={quarter} onDetail={setDetailItem} selectedVenue={selectedVenue} setSelectedVenue={(v) => { setSelectedVenue(v); savePrefs(layers, view, quarter, v, theme); }} />}
       </div>
 
       {detailItem && <DetailPanel t={t} item={detailItem} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
@@ -982,7 +985,20 @@ function MonthView({ t, month, setMonth, events, layers, onDetail }) {
           return (
             <div key={d} className={`min-h-20 ${t.panel} border rounded-lg p-1 ${t.borderHover} transition-colors cursor-pointer relative`}
               style={{ background: layers.hotcold && hc ? ratingColor : undefined, borderColor: sh && layers.school ? "#14B8A680" : undefined }}
-              onClick={() => evts.length > 0 && onDetail(evts[0])}>
+              onClick={() => {
+                if (evts.length > 0) { onDetail(evts[0]); return; }
+                if (ph || sh || (hc && hc.count > 0)) {
+                  onDetail({
+                    id: `date-${key}`,
+                    isDateAnchor: true,
+                    name: ph ? ph.name : sh ? `School Holiday — ${MONTH_NAMES[month]} ${d}` : `${MONTH_NAMES[month]} ${d}, 2026`,
+                    start: key,
+                    end: key,
+                    layer: ph ? "ph" : "sg",
+                    type: ph ? "Public Holiday" : sh ? "School Holiday" : "Date Overview",
+                  });
+                }
+              }}>
               <div className="flex items-center justify-between mb-0.5">
                 <span className={`text-xs font-medium ${ph ? (isDay ? "text-amber-700" : "text-yellow-400") : t.textMuted}`}>{d}</span>
                 <div className="flex gap-0.5">
@@ -1011,7 +1027,7 @@ function MonthView({ t, month, setMonth, events, layers, onDetail }) {
 
 // ─── HEATMAP VIEW (UPGRADED WITH VENUE SELECTOR) ───
 
-function HeatmapView({ t, layers, quarter, selectedVenue, setSelectedVenue }) {
+function HeatmapView({ t, layers, quarter, onDetail, selectedVenue, setSelectedVenue }) {
   const months = quarter === "all" ? [...Array(12).keys()] : QUARTERS[quarter];
   const isDay = t.name === "day";
 
@@ -1092,7 +1108,21 @@ function HeatmapView({ t, layers, quarter, selectedVenue, setSelectedVenue }) {
                     const ratingLabel = hc ? LAYER_COLORS[hc.rating]?.label : "—";
                     return (
                       <div key={mi} className="h-6 rounded-sm relative group cursor-pointer flex items-center justify-center"
-                        style={{ background: layers.hotcold ? bg : t.emptyCell, border: ph && layers.school ? "1px solid #EAB308" : sh && layers.school ? "1px solid #14B8A6" : "1px solid transparent" }}>
+                        style={{ background: layers.hotcold ? bg : t.emptyCell, border: ph && layers.school ? "1px solid #EAB308" : sh && layers.school ? "1px solid #14B8A6" : "1px solid transparent" }}
+                        onClick={() => {
+                          if (!onDetail) return;
+                          if (ph || sh || (hc && hc.count > 0)) {
+                            onDetail({
+                              id: `date-${key}`,
+                              isDateAnchor: true,
+                              name: ph ? ph.name : sh ? `School Holiday — ${MONTH_SHORT[mi]} ${d}` : `${MONTH_SHORT[mi]} ${d}, 2026`,
+                              start: key,
+                              end: key,
+                              layer: ph ? "ph" : "sg",
+                              type: ph ? "Public Holiday" : sh ? "School Holiday" : "Date Overview",
+                            });
+                          }
+                        }}>
                         {ph && layers.school && <Star className="w-2 h-2 text-yellow-400 fill-yellow-400" />}
                         {hc && hc.count > 0 && <span className="text-xs font-bold" style={{ fontSize: "9px", color: hc ? "#ffffffE6" : undefined }}>{hc.count}</span>}
                         <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 ${t.tooltipBg} border rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity shadow-xl`}>
@@ -1142,17 +1172,34 @@ function DetailPanel({ t, item, onClose, onEdit, onDelete }) {
   const layer = item.layer || "sg";
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
   const isCustom = item.id?.startsWith("custom-");
+  const isDateAnchor = item.isDateAnchor === true;
   const mi = item.month ?? (item.start ? getMonthIndex(item.start) : 0);
   const peaks = getVisitorPeaks(mi);
   const hcInfo = item.start ? DAILY_HC[item.start] : null;
+  const phOnDate = item.start ? isPublicHoliday(item.start) : null;
+  const shOnDate = item.start ? isSchoolHoliday(item.start) : false;
   const isDay = t.name === "day";
+
+  // Decide the panel header label based on what was clicked
+  const headerLabel = isDateAnchor
+    ? (phOnDate ? "Public Holiday" : shOnDate ? "School Holiday" : "Date Overview")
+    : layer === "mice" ? "MICE Event"
+    : layer === "campaign" ? "1-Group Campaign"
+    : "Event Detail";
+
+  // PH block colour tuning for day/night
+  const phBlockBg = isDay ? "bg-amber-50 border-amber-300" : "bg-amber-950/40 border-amber-700/60";
+  const phText = isDay ? "text-amber-800" : "text-amber-300";
+  const phSub = isDay ? "text-amber-700" : "text-amber-400/80";
+  const shBlockBg = isDay ? "bg-teal-50 border-teal-300" : "bg-teal-950/40 border-teal-700/60";
+  const shText = isDay ? "text-teal-800" : "text-teal-300";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className={`absolute inset-0 ${t.overlayBg}`} />
       <div className={`relative w-full max-w-md ${t.panel} border-l overflow-y-auto`} onClick={e => e.stopPropagation()}>
         <div className={`sticky top-0 ${t.panel} border-b p-4 flex items-center justify-between z-10`}>
-          <h3 className="font-bold text-sm" style={{ color: color.primary }}>{layer === "mice" ? "MICE Event" : layer === "campaign" ? "1-Group Campaign" : "Event Detail"}</h3>
+          <h3 className="font-bold text-sm" style={{ color: isDateAnchor ? (phOnDate ? "#EAB308" : shOnDate ? "#14B8A6" : color.primary) : color.primary }}>{headerLabel}</h3>
           <button onClick={onClose} className={`p-1 rounded-lg ${t.surfaceHover}`}><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4 space-y-4">
@@ -1160,18 +1207,54 @@ function DetailPanel({ t, item, onClose, onEdit, onDelete }) {
             <h2 className={`text-lg font-bold ${t.textHead}`}>{item.name}</h2>
             {item.tagline && <p className={`text-sm ${t.textMuted} italic mt-1`}>{item.tagline}</p>}
           </div>
-          <div className="space-y-2 text-sm">
-            {item.start && <div className="flex justify-between"><span className={t.textDim}>Dates</span><span className={t.textBody}>{item.start}{item.end && item.end !== item.start ? ` → ${item.end}` : ""}</span></div>}
-            {item.dateStr && <div className="flex justify-between"><span className={t.textDim}>Date</span><span className={t.textBody}>{MONTH_NAMES[mi]} {item.dateStr}</span></div>}
-            {item.venue && <div className="flex justify-between"><span className={t.textDim}>Venue</span><span className={`text-right ${t.textBody}`}>{item.venue}</span></div>}
-            {item.type && <div className="flex justify-between"><span className={t.textDim}>Type</span><span className={t.textBody}>{item.type}</span></div>}
-            {item.cat && <div className="flex justify-between"><span className={t.textDim}>Category</span><span className={`text-right ${t.textBody}`}>{item.cat}</span></div>}
-            <div className="flex justify-between"><span className={t.textDim}>Layer</span>
-              <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: color.primary, color: color.text }}>
-                {layer === "mice" ? "MICE" : layer === "sg" ? "SG Event" : layer === "campaign" ? "Campaign" : layer}
-              </span>
+
+          {/* Public Holiday prominent block */}
+          {phOnDate && (
+            <div className={`rounded-lg p-3 border ${phBlockBg}`}>
+              <div className="flex items-center gap-2">
+                <Star className="w-5 h-5" style={{ color: "#EAB308", fill: "#EAB308" }} />
+                <h4 className={`text-sm font-bold ${phText}`}>{phOnDate.name}</h4>
+              </div>
+              <p className={`text-xs ${phSub} mt-1 ml-7`}>Singapore Public Holiday · {item.start}</p>
             </div>
-          </div>
+          )}
+
+          {/* School Holiday block */}
+          {shOnDate && !phOnDate && (
+            <div className={`rounded-lg p-3 border ${shBlockBg}`}>
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5" style={{ color: "#14B8A6" }} />
+                <h4 className={`text-sm font-bold ${shText}`}>School Holiday</h4>
+              </div>
+              <p className={`text-xs ${isDay ? "text-teal-700" : "text-teal-400/80"} mt-1 ml-7`}>Singapore school term break</p>
+            </div>
+          )}
+          {shOnDate && phOnDate && (
+            <div className={`text-xs ${isDay ? "text-teal-700" : "text-teal-400"} flex items-center gap-1.5`}>
+              <GraduationCap className="w-3.5 h-3.5" /> Falls within school holidays
+            </div>
+          )}
+
+          {!isDateAnchor && (
+            <div className="space-y-2 text-sm">
+              {item.start && <div className="flex justify-between"><span className={t.textDim}>Dates</span><span className={t.textBody}>{item.start}{item.end && item.end !== item.start ? ` → ${item.end}` : ""}</span></div>}
+              {item.dateStr && <div className="flex justify-between"><span className={t.textDim}>Date</span><span className={t.textBody}>{MONTH_NAMES[mi]} {item.dateStr}</span></div>}
+              {item.venue && <div className="flex justify-between"><span className={t.textDim}>Venue</span><span className={`text-right ${t.textBody}`}>{item.venue}</span></div>}
+              {item.type && <div className="flex justify-between"><span className={t.textDim}>Type</span><span className={t.textBody}>{item.type}</span></div>}
+              {item.cat && <div className="flex justify-between"><span className={t.textDim}>Category</span><span className={`text-right ${t.textBody}`}>{item.cat}</span></div>}
+              <div className="flex justify-between"><span className={t.textDim}>Layer</span>
+                <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: color.primary, color: color.text }}>
+                  {layer === "mice" ? "MICE" : layer === "sg" ? "SG Event" : layer === "campaign" ? "Campaign" : layer}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isDateAnchor && item.start && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className={t.textDim}>Date</span><span className={t.textBody}>{item.start}</span></div>
+            </div>
+          )}
 
           {hcInfo && (
             <div className={`${t.surface} rounded-lg p-3`}>
