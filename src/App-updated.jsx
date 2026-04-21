@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer, Sun, Moon } from "lucide-react";
+import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer } from "lucide-react";
 
 // ─── STORAGE WRAPPER (localStorage for Vercel) ───
 const storage = {
@@ -23,77 +23,41 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const QUARTERS = { q1:[0,1,2], q2:[3,4,5], q3:[6,7,8], q4:[9,10,11] };
 
-// ─── THEME SYSTEM (Day / Night) ───
+// ─── THEME (Day only) ───
 
-const THEMES = {
-  night: {
-    name: "night",
-    page: "bg-gray-950 text-gray-100",
-    panel: "bg-gray-900 border-gray-800",
-    panelSoft: "bg-gray-900/80",
-    surface: "bg-gray-800",
-    surfaceHover: "hover:bg-gray-700",
-    surfaceStrong: "bg-gray-700",
-    surfaceStrongHover: "hover:bg-gray-600",
-    border: "border-gray-800",
-    borderSoft: "border-gray-700",
-    borderSubtle: "border-gray-800/50",
-    borderHover: "hover:border-gray-600",
-    borderHoverStrong: "hover:border-gray-500",
-    textHead: "text-white",
-    textBody: "text-gray-200",
-    textMuted: "text-gray-400",
-    textDim: "text-gray-500",
-    inactive: "bg-gray-800 text-gray-400 hover:bg-gray-700",
-    input: "bg-gray-800 border-gray-700 text-gray-100",
-    headerBg: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)",
-    headerBorder: "border-gray-800",
-    overlayBg: "bg-black/50",
-    modalBg: "bg-black/60",
-    emptyCell: "#1E293B",
-    tooltipBg: "bg-gray-800 border-gray-700",
-    divide: "divide-gray-800/50",
-    chipInactiveBorder: "border-gray-700",
-    tagline: "text-gray-400",
-    sub: "text-gray-400",
-    tableBorder: "border-gray-800",
-    gradient: "linear-gradient(90deg, #f472b6, #a78bfa, #38bdf8)",
-    chipDimOpacity: "opacity-40",
-  },
-  day: {
-    name: "day",
-    page: "bg-slate-50 text-slate-800",
-    panel: "bg-white border-slate-200",
-    panelSoft: "bg-white/90",
-    surface: "bg-slate-100",
-    surfaceHover: "hover:bg-slate-200",
-    surfaceStrong: "bg-slate-200",
-    surfaceStrongHover: "hover:bg-slate-300",
-    border: "border-slate-200",
-    borderSoft: "border-slate-300",
-    borderSubtle: "border-slate-200/70",
-    borderHover: "hover:border-slate-400",
-    borderHoverStrong: "hover:border-slate-500",
-    textHead: "text-slate-900",
-    textBody: "text-slate-700",
-    textMuted: "text-slate-600",
-    textDim: "text-slate-500",
-    inactive: "bg-slate-100 text-slate-600 hover:bg-slate-200",
-    input: "bg-white border-slate-300 text-slate-800",
-    headerBg: "linear-gradient(135deg, #ffffff 0%, #eef2ff 50%, #ffffff 100%)",
-    headerBorder: "border-slate-200",
-    overlayBg: "bg-slate-900/30",
-    modalBg: "bg-slate-900/40",
-    emptyCell: "#F1F5F9",
-    tooltipBg: "bg-white border-slate-200 shadow-lg text-slate-800",
-    divide: "divide-slate-200",
-    chipInactiveBorder: "border-slate-300",
-    tagline: "text-slate-600",
-    sub: "text-slate-500",
-    tableBorder: "border-slate-200",
-    gradient: "linear-gradient(90deg, #db2777, #7c3aed, #0284c7)",
-    chipDimOpacity: "opacity-50",
-  },
+const T = {
+  name: "day",
+  page: "bg-slate-50 text-slate-800",
+  panel: "bg-white border-slate-200",
+  panelSoft: "bg-white/90",
+  surface: "bg-slate-100",
+  surfaceHover: "hover:bg-slate-200",
+  surfaceStrong: "bg-slate-200",
+  surfaceStrongHover: "hover:bg-slate-300",
+  border: "border-slate-200",
+  borderSoft: "border-slate-300",
+  borderSubtle: "border-slate-200/70",
+  borderHover: "hover:border-slate-400",
+  borderHoverStrong: "hover:border-slate-500",
+  textHead: "text-slate-900",
+  textBody: "text-slate-700",
+  textMuted: "text-slate-600",
+  textDim: "text-slate-500",
+  inactive: "bg-slate-100 text-slate-600 hover:bg-slate-200",
+  input: "bg-white border-slate-300 text-slate-800",
+  headerBg: "linear-gradient(135deg, #ffffff 0%, #eef2ff 50%, #ffffff 100%)",
+  headerBorder: "border-slate-200",
+  overlayBg: "bg-slate-900/30",
+  modalBg: "bg-slate-900/40",
+  emptyCell: "#F1F5F9",
+  tooltipBg: "bg-white border-slate-200 shadow-lg text-slate-800",
+  divide: "divide-slate-200",
+  chipInactiveBorder: "border-slate-300",
+  tagline: "text-slate-600",
+  sub: "text-slate-500",
+  tableBorder: "border-slate-200",
+  gradient: "linear-gradient(90deg, #db2777, #7c3aed, #0284c7)",
+  chipDimOpacity: "opacity-50",
 };
 
 // ─── VENUE DAILY HOT/COLD DATA (from Master Calendar 2026) ───
@@ -548,10 +512,9 @@ export default function MarketingCalendar() {
   const [showStats, setShowStats] = useState(false);
   const [showVisitors, setShowVisitors] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState("group"); // heatmap venue
-  const [theme, setTheme] = useState("night"); // 'day' | 'night'
   const [loaded, setLoaded] = useState(false);
 
-  const t = THEMES[theme];
+  const t = T;
 
   useEffect(() => {
     (async () => {
@@ -565,7 +528,6 @@ export default function MarketingCalendar() {
           if (p.view) setView(p.view);
           if (p.quarter) setQuarter(p.quarter);
           if (p.venue) setSelectedVenue(p.venue);
-          if (p.theme === "day" || p.theme === "night") setTheme(p.theme);
         }
       } catch (e) { /* first load */ }
       setLoaded(true);
@@ -577,20 +539,14 @@ export default function MarketingCalendar() {
     try { await storage.set("calendar-events", JSON.stringify(evts)); } catch {}
   }, []);
 
-  const savePrefs = useCallback(async (l, v, q, ven, th) => {
-    try { await storage.set("calendar-settings", JSON.stringify({ layers: l, view: v, quarter: q, venue: ven, theme: th })); } catch {}
+  const savePrefs = useCallback(async (l, v, q, ven) => {
+    try { await storage.set("calendar-settings", JSON.stringify({ layers: l, view: v, quarter: q, venue: ven })); } catch {}
   }, []);
 
   const toggleLayer = (key) => {
     const next = { ...layers, [key]: !layers[key] };
     setLayers(next);
-    savePrefs(next, view, quarter, selectedVenue, theme);
-  };
-
-  const toggleTheme = () => {
-    const next = theme === "night" ? "day" : "night";
-    setTheme(next);
-    savePrefs(layers, view, quarter, selectedVenue, next);
+    savePrefs(next, view, quarter, selectedVenue);
   };
 
   const allEvents = useMemo(() => {
@@ -655,7 +611,6 @@ export default function MarketingCalendar() {
     setView("board");
     setQuarter("all");
     setSelectedVenue("group");
-    setTheme("night");
   };
 
   const addEvent = (evt) => {
@@ -707,9 +662,6 @@ export default function MarketingCalendar() {
                 <Search className={`absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textDim}`} />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search events..." className={`${t.input} border rounded-md pl-7 pr-3 py-1.5 text-xs w-44 focus:outline-none focus:border-purple-500`} />
               </div>
-              <button onClick={toggleTheme} title={theme === "night" ? "Switch to Day" : "Switch to Night"} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}>
-                {theme === "night" ? <><Sun className="w-3.5 h-3.5" /> Day</> : <><Moon className="w-3.5 h-3.5" /> Night</>}
-              </button>
               <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-md"><Plus className="w-3.5 h-3.5" /> Add</button>
               <button onClick={copySummary} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><Copy className="w-3.5 h-3.5" /> Copy</button>
               <button onClick={handleReset} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><RotateCcw className="w-3.5 h-3.5" /> Reset</button>
@@ -719,14 +671,14 @@ export default function MarketingCalendar() {
           <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
             <div className="flex gap-1">
               {[["board", "Board", Grid3X3], ["month", "Month", Calendar], ["heatmap", "Heatmap", BarChart3]].map(([v, label, Icon]) => (
-                <button key={v} onClick={() => { setView(v); savePrefs(layers, v, quarter, selectedVenue, theme); }} className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-md ${view === v ? "bg-purple-600 text-white" : t.inactive}`}>
+                <button key={v} onClick={() => { setView(v); savePrefs(layers, v, quarter, selectedVenue); }} className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-md ${view === v ? "bg-purple-600 text-white" : t.inactive}`}>
                   <Icon className="w-3.5 h-3.5" />{label}
                 </button>
               ))}
             </div>
             <div className="flex gap-1">
               {["all", "q1", "q2", "q3", "q4"].map(q => (
-                <button key={q} onClick={() => { setQuarter(q); savePrefs(layers, view, q, selectedVenue, theme); }} className={`text-xs px-3 py-1.5 rounded-md ${quarter === q ? "bg-indigo-600 text-white" : t.inactive}`}>
+                <button key={q} onClick={() => { setQuarter(q); savePrefs(layers, view, q, selectedVenue); }} className={`text-xs px-3 py-1.5 rounded-md ${quarter === q ? "bg-indigo-600 text-white" : t.inactive}`}>
                   {q === "all" ? "All" : q.toUpperCase()}
                 </button>
               ))}
@@ -780,7 +732,7 @@ export default function MarketingCalendar() {
 
       {showVisitors && (
         <div className={`mx-4 mt-3 p-3 ${t.panel} border rounded-lg overflow-x-auto`}>
-          <h3 className={`text-sm font-bold mb-2 ${theme === "night" ? "text-emerald-400" : "text-emerald-700"}`}>International Visitor Intensity</h3>
+          <h3 className="text-sm font-bold mb-2 text-emerald-700">International Visitor Intensity</h3>
           <table className="w-full text-xs">
             <thead><tr>
               <th className={`text-left py-1 px-2 ${t.textDim}`}>Market</th>
@@ -809,7 +761,7 @@ export default function MarketingCalendar() {
       <div className="p-4">
         {view === "board" && <BoardView t={t} eventsByMonth={eventsByMonth} layers={layers} quarter={quarter} onDetail={setDetailItem} onMonthClick={(mi) => { setSelectedMonth(mi); setView("month"); }} />}
         {view === "month" && <MonthView t={t} month={selectedMonth} setMonth={setSelectedMonth} events={eventsByMonth[selectedMonth] || []} layers={layers} onDetail={setDetailItem} />}
-        {view === "heatmap" && <HeatmapView t={t} layers={layers} quarter={quarter} onDetail={setDetailItem} selectedVenue={selectedVenue} setSelectedVenue={(v) => { setSelectedVenue(v); savePrefs(layers, view, quarter, v, theme); }} />}
+        {view === "heatmap" && <HeatmapView t={t} layers={layers} quarter={quarter} onDetail={setDetailItem} selectedVenue={selectedVenue} setSelectedVenue={(v) => { setSelectedVenue(v); savePrefs(layers, view, quarter, v); }} />}
       </div>
 
       {detailItem && <DetailPanel t={t} item={detailItem} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
