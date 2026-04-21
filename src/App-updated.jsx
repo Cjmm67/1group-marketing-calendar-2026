@@ -1201,29 +1201,29 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
   const peaks = getVisitorPeaks(mi);
   const hcInfo = anchorDate ? activeHC[anchorDate] : null;
 
-  // Look up PH/SH on the anchor date first
-  let phOnDate = anchorDate ? isPublicHoliday(anchorDate) : null;
-  let shOnDate = anchorDate ? isSchoolHoliday(anchorDate) : false;
+  // PH/SH check on the anchor date — strict (no fallback to range).
+  // The day the user clicked either IS or IS NOT a public/school holiday.
+  const phOnDate = anchorDate ? isPublicHoliday(anchorDate) : null;
+  const shOnDate = anchorDate ? isSchoolHoliday(anchorDate) : false;
 
-  // For multi-day events, also scan the full range for any PH that falls within
-  // (so a single-day click without _clickDate still catches holidays inside the span)
-  const phsInRange = [];
+  // For multi-day events, also list OTHER public holidays that fall within the range
+  // as supplementary context (e.g. "This event crosses: CNY Day 1"). This is never
+  // used to claim the clicked day is itself a holiday.
+  const otherPHsInRange = [];
   if (item.start && item.end && item.end !== item.start) {
     let cur = item.start;
-    const maxIter = 40; // safety cap
+    const maxIter = 400; // safety cap for long ranges
     let n = 0;
     while (cur <= item.end && n < maxIter) {
-      const p = isPublicHoliday(cur);
-      if (p) phsInRange.push({ date: cur, ph: p });
+      if (cur !== anchorDate) {
+        const p = isPublicHoliday(cur);
+        if (p) otherPHsInRange.push({ date: cur, ph: p });
+      }
       // increment date by one day
       const [y, m, d] = cur.split("-").map(Number);
       const nd = new Date(Date.UTC(y, m - 1, d + 1));
       cur = `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, "0")}-${String(nd.getUTCDate()).padStart(2, "0")}`;
       n++;
-    }
-    // If the anchor date didn't itself land on a PH but the range crosses one, surface it
-    if (!phOnDate && phsInRange.length > 0) {
-      phOnDate = phsInRange[0].ph;
     }
   }
   const isDay = t.name === "day";
@@ -1256,7 +1256,7 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
             {item.tagline && <p className={`text-sm ${t.textMuted} italic mt-1`}>{item.tagline}</p>}
           </div>
 
-          {/* Public Holiday prominent block */}
+          {/* Public Holiday prominent block — only when the clicked/anchor date IS a PH */}
           {phOnDate && (
             <div className={`rounded-lg p-3 border ${phBlockBg}`}>
               <div className="flex items-center gap-2">
@@ -1264,11 +1264,22 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
                 <h4 className={`text-sm font-bold ${phText}`}>{phOnDate.name}</h4>
               </div>
               <p className={`text-xs ${phSub} mt-1 ml-7`}>Singapore Public Holiday · {anchorDate || item.start}</p>
-              {phsInRange.length > 1 && (
+              {otherPHsInRange.length > 0 && (
                 <div className={`mt-2 ml-7 text-xs ${phSub}`}>
-                  Other holidays in this range: {phsInRange.filter(p => p.ph.name !== phOnDate.name).map(p => `${p.ph.name} (${p.date})`).join(", ")}
+                  Also within this range: {otherPHsInRange.map(p => `${p.ph.name} (${p.date})`).join(", ")}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Supplementary block: event crosses PH(s) but clicked day isn't one */}
+          {!phOnDate && otherPHsInRange.length > 0 && (
+            <div className={`text-xs flex items-start gap-1.5 ${isDay ? "text-amber-700" : "text-amber-400"}`}>
+              <Star className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "#EAB308", fill: "#EAB308" }} />
+              <span>
+                This event spans {otherPHsInRange.length === 1 ? "a public holiday" : "public holidays"}:{" "}
+                {otherPHsInRange.map(p => `${p.ph.name} (${p.date})`).join(", ")}
+              </span>
             </div>
           )}
 
