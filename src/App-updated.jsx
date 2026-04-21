@@ -1004,10 +1004,20 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
           const ratingColor = hc && LAYER_COLORS[hc.rating] ? LAYER_COLORS[hc.rating].soft || LAYER_COLORS[hc.rating].primary + "30" : "transparent";
 
           return (
-            <div key={d} className={`min-h-20 ${t.panel} border rounded-lg p-1 ${t.borderHover} transition-colors cursor-pointer relative`}
-              style={{ background: layers.hotcold && hc ? ratingColor : undefined, borderColor: sh && layers.school ? "#14B8A680" : undefined }}
+            <div key={d}
+              className={`min-h-20 rounded-lg p-1 ${t.borderHover} transition-colors cursor-pointer relative ${ph ? "border-2" : sh ? "border-2" : "border"} ${!ph && !sh ? t.panel : ""}`}
+              style={{
+                background: layers.hotcold && hc ? ratingColor : (ph ? "#FFFFFF" : sh ? "#FFFFFF" : undefined),
+                borderColor: ph && layers.school ? "#EAB308" : sh && layers.school ? "#14B8A6" : undefined,
+                boxShadow: ph && layers.school ? "0 0 0 1px #FEF08A inset" : sh && layers.school ? "0 0 0 1px #99F6E4 inset" : undefined,
+              }}
               onClick={() => {
-                if (evts.length > 0) { onDetail(evts[0]); return; }
+                if (evts.length > 0) {
+                  // Attach the clicked date so DetailPanel can surface PH/SH for that specific day,
+                  // even when the event spans multiple days that cross a holiday.
+                  onDetail({ ...evts[0], _clickDate: key });
+                  return;
+                }
                 if (ph || sh || (hc && hc.count > 0)) {
                   onDetail({
                     id: `date-${key}`,
@@ -1015,6 +1025,7 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
                     name: ph ? ph.name : sh ? `School Holiday — ${MONTH_NAMES[month]} ${d}` : `${MONTH_NAMES[month]} ${d}, 2026`,
                     start: key,
                     end: key,
+                    _clickDate: key,
                     layer: ph ? "ph" : "sg",
                     type: ph ? "Public Holiday" : sh ? "School Holiday" : "Date Overview",
                   });
@@ -1099,7 +1110,7 @@ function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
                     const ratingLabel = hc ? LAYER_COLORS[hc.rating]?.label : "—";
                     return (
                       <div key={mi} className="h-6 rounded-sm relative group cursor-pointer flex items-center justify-center"
-                        style={{ background: layers.hotcold ? bg : t.emptyCell, border: ph && layers.school ? "1px solid #EAB308" : sh && layers.school ? "1px solid #14B8A6" : "1px solid transparent" }}
+                        style={{ background: layers.hotcold ? bg : t.emptyCell, border: ph && layers.school ? "2px solid #EAB308" : sh && layers.school ? "2px solid #14B8A6" : "1px solid transparent" }}
                         onClick={() => {
                           if (!onDetail) return;
                           if (ph || sh || (hc && hc.count > 0)) {
@@ -1109,6 +1120,7 @@ function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
                               name: ph ? ph.name : sh ? `School Holiday — ${MONTH_SHORT[mi]} ${d}` : `${MONTH_SHORT[mi]} ${d}, 2026`,
                               start: key,
                               end: key,
+                              _clickDate: key,
                               layer: ph ? "ph" : "sg",
                               type: ph ? "Public Holiday" : sh ? "School Holiday" : "Date Overview",
                             });
@@ -1164,11 +1176,40 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
   const isCustom = item.id?.startsWith("custom-");
   const isDateAnchor = item.isDateAnchor === true;
-  const mi = item.month ?? (item.start ? getMonthIndex(item.start) : 0);
+
+  // Anchor date for PH/SH/HC lookups. Priority:
+  //   1) _clickDate — the specific day the user clicked (most reliable)
+  //   2) item.start — fallback for events passed with their own start date
+  const anchorDate = item._clickDate || item.start || null;
+  const mi = item.month ?? (anchorDate ? getMonthIndex(anchorDate) : 0);
   const peaks = getVisitorPeaks(mi);
-  const hcInfo = item.start ? activeHC[item.start] : null;
-  const phOnDate = item.start ? isPublicHoliday(item.start) : null;
-  const shOnDate = item.start ? isSchoolHoliday(item.start) : false;
+  const hcInfo = anchorDate ? activeHC[anchorDate] : null;
+
+  // Look up PH/SH on the anchor date first
+  let phOnDate = anchorDate ? isPublicHoliday(anchorDate) : null;
+  let shOnDate = anchorDate ? isSchoolHoliday(anchorDate) : false;
+
+  // For multi-day events, also scan the full range for any PH that falls within
+  // (so a single-day click without _clickDate still catches holidays inside the span)
+  const phsInRange = [];
+  if (item.start && item.end && item.end !== item.start) {
+    let cur = item.start;
+    const maxIter = 40; // safety cap
+    let n = 0;
+    while (cur <= item.end && n < maxIter) {
+      const p = isPublicHoliday(cur);
+      if (p) phsInRange.push({ date: cur, ph: p });
+      // increment date by one day
+      const [y, m, d] = cur.split("-").map(Number);
+      const nd = new Date(Date.UTC(y, m - 1, d + 1));
+      cur = `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, "0")}-${String(nd.getUTCDate()).padStart(2, "0")}`;
+      n++;
+    }
+    // If the anchor date didn't itself land on a PH but the range crosses one, surface it
+    if (!phOnDate && phsInRange.length > 0) {
+      phOnDate = phsInRange[0].ph;
+    }
+  }
   const isDay = t.name === "day";
 
   // Decide the panel header label based on what was clicked
@@ -1206,7 +1247,12 @@ function DetailPanel({ t, activeHC, item, onClose, onEdit, onDelete }) {
                 <Star className="w-5 h-5" style={{ color: "#EAB308", fill: "#EAB308" }} />
                 <h4 className={`text-sm font-bold ${phText}`}>{phOnDate.name}</h4>
               </div>
-              <p className={`text-xs ${phSub} mt-1 ml-7`}>Singapore Public Holiday · {item.start}</p>
+              <p className={`text-xs ${phSub} mt-1 ml-7`}>Singapore Public Holiday · {anchorDate || item.start}</p>
+              {phsInRange.length > 1 && (
+                <div className={`mt-2 ml-7 text-xs ${phSub}`}>
+                  Other holidays in this range: {phsInRange.filter(p => p.ph.name !== phOnDate.name).map(p => `${p.ph.name} (${p.date})`).join(", ")}
+                </div>
+              )}
             </div>
           )}
 
