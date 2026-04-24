@@ -676,12 +676,26 @@ export default function MarketingCalendar() {
         const saved = await storage.get("calendar-events");
         if (saved?.value) setCustomEvents(JSON.parse(saved.value));
         // Venue events: load from storage, or seed from SEED_VENUE_EVENTS on first run.
+        // Also handles: if seed events have been added to the code since the user last loaded,
+        // automatically merge those missing seeds into the user's stored copy. User's edits to
+        // other events are preserved. To intentionally remove a seed event, the user must delete
+        // it AFTER this merge (which creates a user-version that persists).
         const savedVenueEvents = await storage.get("calendar-venue-events");
         if (savedVenueEvents?.value) {
           try {
             const parsed = JSON.parse(savedVenueEvents.value);
-            // Defensive: ensure it's an array
-            if (Array.isArray(parsed)) setVenueEvents(parsed);
+            if (Array.isArray(parsed)) {
+              // Detect missing seed events by ID (only vn-fh-* ids are seed-originated).
+              const storedIds = new Set(parsed.map(e => e.id));
+              const missingSeeds = SEED_VENUE_EVENTS.filter(s => !storedIds.has(s.id));
+              if (missingSeeds.length > 0) {
+                const merged = [...parsed, ...missingSeeds];
+                setVenueEvents(merged);
+                try { await storage.set("calendar-venue-events", JSON.stringify(merged)); } catch {}
+              } else {
+                setVenueEvents(parsed);
+              }
+            }
           } catch {}
         } else {
           // First-run seed: persist SEED_VENUE_EVENTS as the initial live copy.
