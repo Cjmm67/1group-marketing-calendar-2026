@@ -1507,7 +1507,19 @@ function EventFormModal({ t, event, onSave, onClose }) {
             <input type="date" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} />
           </div>
         </div>
-        <input value={form.venue || ""} onChange={e => setForm({ ...form, venue: e.target.value })} placeholder="Venue" className={inputCls} />
+        <select value={form.venue || ""} onChange={e => setForm({ ...form, venue: e.target.value })} className={inputCls}>
+          <option value="">— No venue —</option>
+          <option value="The Summerhouse">The Summerhouse</option>
+          <option value="The Garage">The Garage</option>
+          <option value="1-Altitude Coast">1-Altitude Coast</option>
+          <option value="1-Arden">1-Arden</option>
+          <option value="The Alkaff Mansion">The Alkaff Mansion</option>
+          <option value="1-Alfaro">1-Alfaro</option>
+          <option value="1-Atico">1-Atico</option>
+          <option value="The Riverhouse">The Riverhouse</option>
+          <option value="1-Flowerhill">1-Flowerhill</option>
+          <option value="Monti">Monti</option>
+        </select>
         <input value={form.type || ""} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type (Concert, Trade Show, etc.)" className={inputCls} />
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className={`flex-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-sm py-2 rounded-md`}>Cancel</button>
