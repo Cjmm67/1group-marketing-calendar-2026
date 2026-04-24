@@ -533,7 +533,9 @@ const VENUE_SUBBRANDS = {
   flowerhill: ["Camille", "WAFU by Wildseed (Day)", "WAFU by Wildseed (Night)", "Estate"],
 };
 
-// VENUE_EVENTS: venue-specific activities that don't fit the group CAMPAIGNS / MICE / SG Events layers.
+// SEED_VENUE_EVENTS: initial dataset, loaded into user's browser storage on first run.
+// After first load, the live source is `venueEvents` state (persisted to `calendar-venue-events`
+// in localStorage). Users can add/edit/delete. Restore Defaults re-seeds from this const.
 // Source: per-venue marketing calendars supplied by Chris Millar (1-Group).
 // Dedup rule: if an activity already exists in CAMPAIGNS (group-level), it is INTENTIONALLY DROPPED here —
 // the group campaign layer already surfaces it. Do not add back without explicit decision.
@@ -554,7 +556,7 @@ const VENUE_SUBBRANDS = {
 //   Summertime Madness (Jun, WAFU Night), Let's Go Local/SG60 (Aug, WAFU Night),
 //   Oktoberfest (Oct, WAFU Night), Festive High Tea (Dec, WAFU Day),
 //   Festive/NYE Countdown (Dec, WAFU Night + Camille), Wellness (Jan carries into 2027, out of scope)
-const VENUE_EVENTS = [
+const SEED_VENUE_EVENTS = [
   // Flowerhill · Estate
   {id:"vn-fh-1",name:"Heritage Walk Month",venue:"flowerhill",subBrand:"Estate",month:3,undated:true,hook:"SDC Imbiah Hill Nature Month",layer:"venue"},
   {id:"vn-fh-2",name:"Mother's Day Garden",venue:"flowerhill",subBrand:"Estate",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day",layer:"venue"},
@@ -635,6 +637,7 @@ export default function MarketingCalendar() {
   const [detailItem, setDetailItem] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [customEvents, setCustomEvents] = useState([]);
+  const [venueEvents, setVenueEvents] = useState(SEED_VENUE_EVENTS); // user-editable copy of venue activities
   const [editingEvent, setEditingEvent] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showVisitors, setShowVisitors] = useState(false);
@@ -672,6 +675,18 @@ export default function MarketingCalendar() {
         }
         const saved = await storage.get("calendar-events");
         if (saved?.value) setCustomEvents(JSON.parse(saved.value));
+        // Venue events: load from storage, or seed from SEED_VENUE_EVENTS on first run.
+        const savedVenueEvents = await storage.get("calendar-venue-events");
+        if (savedVenueEvents?.value) {
+          try {
+            const parsed = JSON.parse(savedVenueEvents.value);
+            // Defensive: ensure it's an array
+            if (Array.isArray(parsed)) setVenueEvents(parsed);
+          } catch {}
+        } else {
+          // First-run seed: persist SEED_VENUE_EVENTS as the initial live copy.
+          try { await storage.set("calendar-venue-events", JSON.stringify(SEED_VENUE_EVENTS)); } catch {}
+        }
         const prefs = await storage.get("calendar-settings");
         if (prefs?.value) {
           const p = JSON.parse(prefs.value);
@@ -703,6 +718,11 @@ export default function MarketingCalendar() {
     try { await storage.set("calendar-events", JSON.stringify(evts)); } catch {}
   }, []);
 
+  const saveVenueEvents = useCallback(async (evts) => {
+    setVenueEvents(evts);
+    try { await storage.set("calendar-venue-events", JSON.stringify(evts)); } catch {}
+  }, []);
+
   const savePrefs = useCallback(async (l, v, q, z) => {
     try { await storage.set("calendar-settings", JSON.stringify({ layers: l, view: v, quarter: q, zone: z })); } catch {}
   }, []);
@@ -726,9 +746,9 @@ export default function MarketingCalendar() {
         end: `2026-${String(endM + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
       };
     }));
-    // Venue-specific activities (VENUE_EVENTS). Undated events get synthetic start/end
-    // spanning the whole month so views/filters that rely on start/end still work.
-    if (layers.venue) events.push(...VENUE_EVENTS.map(e => {
+    // Venue-specific activities (from venueEvents state — user-editable, seeded from SEED_VENUE_EVENTS).
+    // Undated events get synthetic start/end spanning the whole month so views/filters work.
+    if (layers.venue) events.push(...venueEvents.map(e => {
       if (e.start && e.end) return e;
       if (e.undated && e.month != null) {
         const lastDay = new Date(2026, e.month + 1, 0).getDate();
@@ -742,7 +762,7 @@ export default function MarketingCalendar() {
     }));
     events.push(...customEvents);
     return events;
-  }, [layers, customEvents]);
+  }, [layers, customEvents, venueEvents]);
 
   const filteredEvents = useMemo(() => {
     let evts = allEvents;
@@ -805,30 +825,67 @@ export default function MarketingCalendar() {
   }, [eventsByMonth, customEvents, activeHC]);
 
   const handleReset = async () => {
-    if (!confirm("Reset all custom events and preferences?")) return;
-    try { await storage.delete("calendar-events"); await storage.delete("calendar-settings"); } catch {}
+    if (!confirm("Reset will wipe all custom events, venue event edits, and preferences. This restores the default Flowerhill activities and removes any venue events you've added or edited. Continue?")) return;
+    try {
+      await storage.delete("calendar-events");
+      await storage.delete("calendar-settings");
+      await storage.delete("calendar-venue-events");
+      // Re-seed venue events immediately so the next load starts clean.
+      await storage.set("calendar-venue-events", JSON.stringify(SEED_VENUE_EVENTS));
+    } catch {}
     setCustomEvents([]);
+    setVenueEvents(SEED_VENUE_EVENTS);
     setLayers({ hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true, venue: true });
     setView("board");
     setQuarter("all");
     setSelectedZone("group");
   };
 
+  // canEditEvent: UI-level permission check. Returns true if the current user can edit/delete the given event.
+  // - Any signed-in user with master/admin/staff role can edit/delete any event.
+  // - Venue-role users can only edit/delete venue-layer events tagged to their assigned venue.
+  //   (Client-side only; a determined user can bypass via DevTools. Real enforcement waits for backend.)
+  // - Unsigned users can do nothing (sign-in gate blocks reaching this anyway).
+  const canEditEvent = useCallback((item) => {
+    if (!user) return false;
+    if (user.role === "master" || user.role === "admin" || user.role === "staff") return true;
+    if (user.role === "venue" && user.venue) {
+      // Venue users can only touch venue-layer events whose venue matches theirs.
+      if (item.layer !== "venue") return false;
+      return item.venue === user.venue;
+    }
+    return false;
+  }, [user]);
+
   const addEvent = (evt) => {
-    const newEvts = [...customEvents, { ...evt, id: `custom-${Date.now()}`, layer: evt.layer || "sg" }];
-    saveEvents(newEvts);
+    // Venue-layer events go to venueEvents storage; everything else goes to customEvents.
+    if (evt.layer === "venue") {
+      const newEvt = { ...evt, id: `vn-user-${Date.now()}` };
+      saveVenueEvents([...venueEvents, newEvt]);
+    } else {
+      const newEvt = { ...evt, id: `custom-${Date.now()}`, layer: evt.layer || "sg" };
+      saveEvents([...customEvents, newEvt]);
+    }
     setShowAddForm(false);
   };
 
   const updateEvent = (evt) => {
-    const newEvts = customEvents.map(e => e.id === evt.id ? evt : e);
-    saveEvents(newEvts);
+    if (evt.layer === "venue") {
+      saveVenueEvents(venueEvents.map(e => e.id === evt.id ? evt : e));
+    } else {
+      saveEvents(customEvents.map(e => e.id === evt.id ? evt : e));
+    }
     setEditingEvent(null);
   };
 
   const deleteEvent = (id) => {
     if (!confirm("Delete this event?")) return;
-    saveEvents(customEvents.filter(e => e.id !== id));
+    // Check venueEvents first (IDs start with "vn-"), fall back to customEvents.
+    if (venueEvents.some(e => e.id === id)) {
+      saveVenueEvents(venueEvents.filter(e => e.id !== id));
+    } else {
+      saveEvents(customEvents.filter(e => e.id !== id));
+    }
     setDetailItem(null);
   };
 
@@ -1380,7 +1437,7 @@ export default function MarketingCalendar() {
         {view === "heatmap" && <HeatmapView t={t} activeHC={activeHC} activeVenue={activeVenue} layers={layers} quarter={quarter} onDetail={setDetailItem} />}
       </div>
 
-      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} editOK={editOK} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
+      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} editOK={editOK} canEditEvent={canEditEvent} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
 
       {editOK && (showAddForm || editingEvent) && (
         <EventFormModal
@@ -1720,10 +1777,10 @@ function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
 
 // ─── DETAIL PANEL ───
 
-function DetailPanel({ t, activeHC, item, editOK, onClose, onEdit, onDelete }) {
+function DetailPanel({ t, activeHC, item, editOK, canEditEvent, onClose, onEdit, onDelete }) {
   const layer = item.layer || "sg";
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
-  const isCustom = item.id?.startsWith("custom-");
+  const canEdit = canEditEvent ? canEditEvent(item) : item.id?.startsWith("custom-");
   const isDateAnchor = item.isDateAnchor === true;
 
   // Anchor date for PH/SH/HC lookups. Priority:
@@ -1876,7 +1933,7 @@ function DetailPanel({ t, activeHC, item, editOK, onClose, onEdit, onDelete }) {
             </div>
           )}
 
-          {isCustom && editOK && (
+          {canEdit && editOK && (
             <div className="flex gap-2 pt-2">
               <button onClick={() => onEdit(item)} className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded-md flex-1"><Edit className="w-3.5 h-3.5" /> Edit</button>
               <button onClick={() => onDelete(item.id)} className="flex items-center gap-1 bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-2 rounded-md flex-1"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
@@ -1891,53 +1948,105 @@ function DetailPanel({ t, activeHC, item, editOK, onClose, onEdit, onDelete }) {
 // ─── EVENT FORM MODAL ───
 
 function EventFormModal({ t, event, onSave, onClose }) {
-  const [form, setForm] = useState(event || {
+  // Backward compat: if editing a legacy custom event with a display-name venue
+  // (e.g. "1-Flowerhill"), map it back to its slug ("flowerhill") on load.
+  const DISPLAY_TO_SLUG = {
+    "The Summerhouse": "summerhouse", "The Garage": "garage", "1-Altitude Coast": "altitude",
+    "1-Arden": "arden", "The Alkaff Mansion": "alkaff", "1-Alfaro": "alfaro",
+    "1-Atico": "atico", "The Riverhouse": "riverhouse", "1-Flowerhill": "flowerhill", "Monti": "monti",
+  };
+  const normaliseVenue = (v) => DISPLAY_TO_SLUG[v] || v || "";
+
+  const [form, setForm] = useState(event ? { ...event, venue: normaliseVenue(event.venue) } : {
     name: "", layer: "sg", start: "2026-01-01", end: "2026-01-01", type: "", venue: "", cat: "", dateStr: "",
+    subBrand: "", hook: "", undated: false,
   });
 
   const handleSubmit = () => {
     if (!form.name) return;
-    const mi = getMonthIndex(form.start);
-    onSave({ ...form, month: mi });
+    // For undated venue events, strip start/end; store month index (derived from current start).
+    // For dated events (all other layers + dated venue events), keep start/end.
+    const payload = { ...form };
+    if (payload.layer === "venue" && payload.undated) {
+      payload.month = getMonthIndex(payload.start);
+      delete payload.start;
+      delete payload.end;
+    } else {
+      payload.month = getMonthIndex(payload.start);
+    }
+    // Clean: remove empty-string optionals so JSON stays tidy.
+    if (!payload.subBrand) delete payload.subBrand;
+    if (!payload.hook) delete payload.hook;
+    if (!payload.undated) delete payload.undated;
+    onSave(payload);
   };
 
   const inputCls = `w-full ${t.input} border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-purple-500`;
+  const isVenue = form.layer === "venue";
+  // Sub-brand options for the selected venue (only Flowerhill currently).
+  const subBrandOptions = isVenue && form.venue && VENUE_SUBBRANDS[form.venue] ? VENUE_SUBBRANDS[form.venue] : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className={`absolute inset-0 ${t.modalBg}`} />
-      <div className={`relative ${t.panel} border rounded-xl p-5 w-full max-w-md space-y-3`} onClick={e => e.stopPropagation()}>
+      <div className={`relative ${t.panel} border rounded-xl p-5 w-full max-w-md space-y-3 max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
         <h3 className={`font-bold text-sm ${t.textHead}`}>{event ? "Edit Event" : "Add Event"}</h3>
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Event name *" className={inputCls} />
         <select value={form.layer} onChange={e => setForm({ ...form, layer: e.target.value })} className={inputCls}>
           <option value="sg">SG Event</option>
           <option value="mice">MICE</option>
           <option value="campaign">Campaign</option>
+          <option value="venue">Venue Activity</option>
         </select>
-        <div className="grid grid-cols-2 gap-2">
+        <select value={form.venue || ""} onChange={e => setForm({ ...form, venue: e.target.value, subBrand: "" })} className={inputCls}>
+          <option value="">— No venue —</option>
+          <option value="summerhouse">The Summerhouse</option>
+          <option value="garage">The Garage</option>
+          <option value="altitude">1-Altitude Coast</option>
+          <option value="arden">1-Arden</option>
+          <option value="alkaff">The Alkaff Mansion</option>
+          <option value="alfaro">1-Alfaro</option>
+          <option value="atico">1-Atico</option>
+          <option value="riverhouse">The Riverhouse</option>
+          <option value="flowerhill">1-Flowerhill</option>
+          <option value="monti">Monti</option>
+        </select>
+        {isVenue && subBrandOptions && (
+          <select value={form.subBrand || ""} onChange={e => setForm({ ...form, subBrand: e.target.value })} className={inputCls}>
+            <option value="">— No sub-brand —</option>
+            {subBrandOptions.map(sb => <option key={sb} value={sb}>{sb}</option>)}
+          </select>
+        )}
+        {isVenue && (
+          <input value={form.hook || ""} onChange={e => setForm({ ...form, hook: e.target.value })} placeholder="Anchor / Hook (e.g. Mother's Day · 1G20)" className={inputCls} />
+        )}
+        {isVenue && (
+          <label className={`flex items-center gap-2 text-sm ${t.textBody} cursor-pointer`}>
+            <input type="checkbox" checked={!!form.undated} onChange={e => setForm({ ...form, undated: e.target.checked })} className="w-4 h-4" />
+            <span>Undated — runs across the whole month (no specific day)</span>
+          </label>
+        )}
+        {(!isVenue || !form.undated) && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={`text-xs ${t.textDim}`}>Start</label>
+              <input type="date" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} className={inputCls} />
+            </div>
+            <div>
+              <label className={`text-xs ${t.textDim}`}>End</label>
+              <input type="date" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} />
+            </div>
+          </div>
+        )}
+        {isVenue && form.undated && (
           <div>
-            <label className={`text-xs ${t.textDim}`}>Start</label>
+            <label className={`text-xs ${t.textDim}`}>Month (pick any day in the target month)</label>
             <input type="date" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} className={inputCls} />
           </div>
-          <div>
-            <label className={`text-xs ${t.textDim}`}>End</label>
-            <input type="date" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} />
-          </div>
-        </div>
-        <select value={form.venue || ""} onChange={e => setForm({ ...form, venue: e.target.value })} className={inputCls}>
-          <option value="">— No venue —</option>
-          <option value="The Summerhouse">The Summerhouse</option>
-          <option value="The Garage">The Garage</option>
-          <option value="1-Altitude Coast">1-Altitude Coast</option>
-          <option value="1-Arden">1-Arden</option>
-          <option value="The Alkaff Mansion">The Alkaff Mansion</option>
-          <option value="1-Alfaro">1-Alfaro</option>
-          <option value="1-Atico">1-Atico</option>
-          <option value="The Riverhouse">The Riverhouse</option>
-          <option value="1-Flowerhill">1-Flowerhill</option>
-          <option value="Monti">Monti</option>
-        </select>
-        <input value={form.type || ""} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type (Concert, Trade Show, etc.)" className={inputCls} />
+        )}
+        {!isVenue && (
+          <input value={form.type || ""} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type (Concert, Trade Show, etc.)" className={inputCls} />
+        )}
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className={`flex-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-sm py-2 rounded-md`}>Cancel</button>
           <button onClick={handleSubmit} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-sm py-2 rounded-md flex items-center justify-center gap-1"><Check className="w-3.5 h-3.5" /> Save</button>
