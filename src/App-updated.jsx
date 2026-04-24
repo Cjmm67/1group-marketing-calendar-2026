@@ -675,7 +675,7 @@ export default function MarketingCalendar() {
         const prefs = await storage.get("calendar-settings");
         if (prefs?.value) {
           const p = JSON.parse(prefs.value);
-          if (p.layers) setLayers(p.layers);
+          if (p.layers) setLayers(prev => ({ ...prev, ...p.layers }));
           if (p.view) setView(p.view);
           if (p.quarter) setQuarter(p.quarter);
           if (p.zone && VENUE_HC_RAW[p.zone]) setSelectedZone(p.zone);
