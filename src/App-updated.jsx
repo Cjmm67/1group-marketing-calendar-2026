@@ -779,6 +779,13 @@ export default function MarketingCalendar() {
       const mi = e.month ?? (e.start ? getMonthIndex(e.start) : 0);
       if (map[mi]) map[mi].push(e);
     });
+    // Sort each month by layer priority so venue-specific activities surface first.
+    // Without this, push order (MICE → SG → campaigns → venue) puts venue events
+    // last, where the Board view's truncation cap can hide them in busy months.
+    const layerOrder = { venue: 0, campaign: 1, mice: 2, sg: 3 };
+    Object.keys(map).forEach(mi => {
+      map[mi].sort((a, b) => (layerOrder[a.layer] ?? 4) - (layerOrder[b.layer] ?? 4));
+    });
     return map;
   }, [filteredEvents]);
 
@@ -1457,10 +1464,10 @@ function BoardView({ t, activeHC, activeVenue, eventsByMonth, layers, quarter, o
                   )}
 
                   <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {evts.slice(0, 12).map(e => (
+                    {evts.slice(0, 20).map(e => (
                       <EventChip key={e.id} t={t} event={e} onClick={() => onDetail(e)} />
                     ))}
-                    {evts.length > 12 && <div className={`text-xs ${t.textDim} text-center`}>+{evts.length - 12} more</div>}
+                    {evts.length > 20 && <div className={`text-xs ${t.textDim} text-center`}>+{evts.length - 20} more</div>}
                   </div>
                 </div>
               );
