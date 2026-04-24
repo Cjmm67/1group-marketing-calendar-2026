@@ -526,6 +526,70 @@ const CAMPAIGNS = [
   {id:"camp-11",name:"New Year's Eve Countdown",month:11,tagline:"",layer:"campaign"},
 ];
 
+// ─── VENUE-SPECIFIC ACTIVITIES ───
+// Venues whose Excel export's Marketing Calendar sheet renders as multiple rows (one per sub-brand).
+// Venues not listed here render as a single row (default behaviour, unchanged).
+const VENUE_SUBBRANDS = {
+  flowerhill: ["Camille", "WAFU by Wildseed (Day)", "WAFU by Wildseed (Night)", "Estate"],
+};
+
+// VENUE_EVENTS: venue-specific activities that don't fit the group CAMPAIGNS / MICE / SG Events layers.
+// Source: per-venue marketing calendars supplied by Chris Millar (1-Group).
+// Dedup rule: if an activity already exists in CAMPAIGNS (group-level), it is INTENTIONALLY DROPPED here —
+// the group campaign layer already surfaces it. Do not add back without explicit decision.
+//
+// Schema:
+//   id:       "vn-<venue-slug>-<n>" — globally unique
+//   name:     Activity name as shown in UI and Excel
+//   venue:    Must match a VENUE_KEYS entry (maps to a zone in the tool)
+//   subBrand: For sub-branded venues, one of VENUE_SUBBRANDS[venue]. Omit for single-brand venues.
+//   start:    YYYY-MM-DD if a specific date is known
+//   end:      YYYY-MM-DD (== start for single-day) if dated
+//   month:    0-11 if undated (month-only) — used instead of start/end
+//   undated:  true if activity has no specific date (runs across the month)
+//   hook:     Anchor / hook text from Tactical Detail sheet (shown in detail panel + Excel)
+//   layer:    Always "venue" for these events
+//
+// FLOWERHILL — dedup drops (already covered by CAMPAIGNS, not re-added here):
+//   Summertime Madness (Jun, WAFU Night), Let's Go Local/SG60 (Aug, WAFU Night),
+//   Oktoberfest (Oct, WAFU Night), Festive High Tea (Dec, WAFU Day),
+//   Festive/NYE Countdown (Dec, WAFU Night + Camille), Wellness (Jan carries into 2027, out of scope)
+const VENUE_EVENTS = [
+  // Flowerhill · Estate
+  {id:"vn-fh-1",name:"Heritage Walk Month",venue:"flowerhill",subBrand:"Estate",month:3,undated:true,hook:"SDC Imbiah Hill Nature Month",layer:"venue"},
+  {id:"vn-fh-2",name:"Mother's Day Garden",venue:"flowerhill",subBrand:"Estate",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day",layer:"venue"},
+  {id:"vn-fh-3",name:"Pet Festival (SBR Record Attempt)",venue:"flowerhill",subBrand:"Estate",start:"2026-06-01",end:"2026-06-01",hook:"Int'l Shetland Sheepdog Day (1 Jun) · Int'l Corgi Day (4 Jun) · World Dachshund Day (21 Jun)",layer:"venue"},
+  {id:"vn-fh-4",name:"Summer Sunset Series",venue:"flowerhill",subBrand:"Estate",month:6,undated:true,hook:"SensoryFest co-partnership",layer:"venue"},
+  {id:"vn-fh-5",name:"National Day Heritage",venue:"flowerhill",subBrand:"Estate",start:"2026-08-09",end:"2026-08-09",hook:"SG60 · National Day",layer:"venue"},
+  {id:"vn-fh-6",name:"Autumn Harvest Table",venue:"flowerhill",subBrand:"Estate",month:8,undated:true,hook:"Corporate season launch",layer:"venue"},
+  {id:"vn-fh-7",name:"Garden Gala / Wedding Showcase",venue:"flowerhill",subBrand:"Estate",month:9,undated:true,hook:"Wedding + MICE peak",layer:"venue"},
+  {id:"vn-fh-8",name:"Twilight Garden",venue:"flowerhill",subBrand:"Estate",month:10,undated:true,hook:"",layer:"venue"},
+  {id:"vn-fh-9",name:"Christmas at the Gardens",venue:"flowerhill",subBrand:"Estate",month:11,undated:true,hook:"SDC festive island campaign",layer:"venue"},
+
+  // Flowerhill · Camille
+  {id:"vn-fh-10",name:"Seasonal Dinner Experience: Sakura Bloom",venue:"flowerhill",subBrand:"Camille",month:3,undated:true,hook:"",layer:"venue"},
+  {id:"vn-fh-11",name:"Brunch of Roses (Mother's Day)",venue:"flowerhill",subBrand:"Camille",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · 1-Group 20th Anniversary",layer:"venue"},
+  {id:"vn-fh-12",name:"Seasonal Dinner Experience: Jardin",venue:"flowerhill",subBrand:"Camille",month:5,undated:true,hook:"",layer:"venue"},
+  {id:"vn-fh-13",name:"Bridal Fair (Jun)",venue:"flowerhill",subBrand:"Camille",month:5,undated:true,hook:"Wedding season",layer:"venue"},
+  {id:"vn-fh-14",name:"Bridal Fair (Jul)",venue:"flowerhill",subBrand:"Camille",month:6,undated:true,hook:"Wedding enquiry capture",layer:"venue"},
+  {id:"vn-fh-15",name:"Experiential Dinner (Cultural Partnership)",venue:"flowerhill",subBrand:"Camille",month:9,undated:true,hook:"Cultural / lifestyle partnership (e.g. Monet exhibition)",layer:"venue"},
+  {id:"vn-fh-16",name:"White Truffle & Wine Menu",venue:"flowerhill",subBrand:"Camille",month:10,undated:true,hook:"White truffle season",layer:"venue"},
+
+  // Flowerhill · WAFU by Wildseed (Day) [a.k.a. WSC = Wildseed Cafe]
+  {id:"vn-fh-17",name:"Brunch of Roses (Mother's Day)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · 1-Group 20th Anniversary",layer:"venue"},
+  {id:"vn-fh-18",name:"WAFU by Wildseed Menu Launch & Kakigori Launch",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-06-01",end:"2026-06-01",hook:"Neo-Japanese Menu",layer:"venue"},
+  {id:"vn-fh-19",name:"Farmers / Pet Market (Jul)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",month:6,undated:true,hook:"Pet pillar · weekend footfall",layer:"venue"},
+  {id:"vn-fh-20",name:"Zen-Floral High Tea Launch",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",month:6,undated:true,hook:"Afternoon dining activation",layer:"venue"},
+  {id:"vn-fh-21",name:"Int'l Dog Day · SG60 High Tea",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-08-26",end:"2026-08-26",hook:"Int'l Dog Day (26 Aug) · SG60",layer:"venue"},
+  {id:"vn-fh-22",name:"Farmers / Pet Market (Sep)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",month:8,undated:true,hook:"",layer:"venue"},
+  {id:"vn-fh-23",name:"Int'l Coffee Day · DJ Coffee Party",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-10-01",end:"2026-10-01",hook:"Int'l Coffee Day",layer:"venue"},
+
+  // Flowerhill · WAFU by Wildseed (Night) [a.k.a. WSBG = Wildseed Bar & Grill]
+  {id:"vn-fh-24",name:"Wagyu Grill Bar · Pit Master Collab",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:4,undated:true,hook:"Wagyu menu hero",layer:"venue"},
+  {id:"vn-fh-25",name:"Sentosa GrillFest",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:6,undated:true,hook:"SDC GrillFest (island-wide)",layer:"venue"},
+  {id:"vn-fh-26",name:"Wagyu Grill Bar · Pit Master Collab (2nd edition)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:8,undated:true,hook:"Repeat collab format",layer:"venue"},
+];
+
 // ─── COLOURS ───
 
 const LAYER_COLORS = {
@@ -539,6 +603,7 @@ const LAYER_COLORS = {
   school: { primary: "#14B8A6", bg: "#CCFBF1", text: "#fff" },
   ph: { primary: "#EAB308", bg: "#FEF9C3", text: "#000" },
   campaign: { primary: "#EC4899", bg: "#FCE7F3", text: "#fff" },
+  venue: { primary: "#0891B2", bg: "#CFFAFE", text: "#fff" },
 };
 
 const INTENSITY_COLORS = { Peak: "#059669", High: "#10B981", Mod: "#6EE7B7", Low: "#D1FAE5" };
@@ -565,7 +630,7 @@ export default function MarketingCalendar() {
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [search, setSearch] = useState("");
   const [layers, setLayers] = useState({
-    hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true,
+    hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true, venue: true,
   });
   const [detailItem, setDetailItem] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -661,6 +726,20 @@ export default function MarketingCalendar() {
         end: `2026-${String(endM + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
       };
     }));
+    // Venue-specific activities (VENUE_EVENTS). Undated events get synthetic start/end
+    // spanning the whole month so views/filters that rely on start/end still work.
+    if (layers.venue) events.push(...VENUE_EVENTS.map(e => {
+      if (e.start && e.end) return e;
+      if (e.undated && e.month != null) {
+        const lastDay = new Date(2026, e.month + 1, 0).getDate();
+        return {
+          ...e,
+          start: `2026-${String(e.month + 1).padStart(2, "0")}-01`,
+          end: `2026-${String(e.month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+        };
+      }
+      return e;
+    }));
     events.push(...customEvents);
     return events;
   }, [layers, customEvents]);
@@ -722,7 +801,7 @@ export default function MarketingCalendar() {
     if (!confirm("Reset all custom events and preferences?")) return;
     try { await storage.delete("calendar-events"); await storage.delete("calendar-settings"); } catch {}
     setCustomEvents([]);
-    setLayers({ hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true });
+    setLayers({ hotcold: true, mice: true, sg: true, visitor: true, school: true, campaign: true, venue: true });
     setView("board");
     setQuarter("all");
     setSelectedZone("group");
@@ -841,43 +920,65 @@ export default function MarketingCalendar() {
       c.border = { bottom: { style: "medium", color: { argb: "FF000000" } } };
     });
 
-    // Row 5 — venue content row
-    const venueRow = wsMC.getRow(5);
-    venueRow.height = 120;
-    // Col 1: venue name cell
-    const venueCell = venueRow.getCell(1);
-    venueCell.value = venueShortName.toUpperCase();
-    venueCell.font = { bold: true, color: { argb: WHITE }, size: 12 };
-    venueCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE } };
-    venueCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    // Row 5+ — venue content rows. Sub-branded venues render one row per sub-brand (matching
+    // the 1-Flowerhill xlsx shape). Single-brand venues render one row (original behaviour).
+    const subBrands = VENUE_SUBBRANDS[selectedZone];
+    const rowDefinitions = subBrands
+      ? subBrands.map(sb => ({ label: sb.toUpperCase(), subBrand: sb }))
+      : [{ label: venueShortName.toUpperCase(), subBrand: null }];
 
-    // For each month, collect events in this order: campaigns → MICE → starred SG → other SG → visitor peaks
-    allMonths.forEach(mi => {
-      const evts = eventsByMonth[mi] || [];
-      const campaigns = evts.filter(e => e.layer === "campaign").map(e => e.name);
-      const mice = evts.filter(e => e.layer === "mice").map(e => e.name);
-      const sgStarred = evts.filter(e => e.layer === "sg" && e.name?.includes("⭐")).map(e => e.name);
-      const sgOther = evts.filter(e => e.layer === "sg" && !e.name?.includes("⭐")).map(e => e.name);
-      const peaks = getVisitorPeaks(mi);
+    rowDefinitions.forEach((rowDef, rowIdx) => {
+      const rowNum = 5 + rowIdx;
+      const row = wsMC.getRow(rowNum);
+      row.height = 120;
 
-      const lines = [];
-      campaigns.forEach(n => lines.push(n));
-      mice.forEach(n => lines.push(n));
-      sgStarred.forEach(n => lines.push(n));
-      sgOther.slice(0, 3).forEach(n => lines.push(n)); // cap "other SG" to keep cells readable
-      if (sgOther.length > 3) lines.push(`+${sgOther.length - 3} more events`);
-      if (peaks.length > 0) lines.push(`Peaks: ${peaks.join(", ")}`);
+      // Col 1: row label cell (venue name or sub-brand name)
+      const labelCell = row.getCell(1);
+      labelCell.value = rowDef.label;
+      labelCell.font = { bold: true, color: { argb: WHITE }, size: 11 };
+      labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SLATE } };
+      labelCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
 
-      const cell = venueRow.getCell(mi + 2);
-      cell.value = lines.join("\n") || "—";
-      cell.font = { size: 9 };
-      cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFE5E7EB" } },
-        bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
-        left: { style: "thin", color: { argb: "FFE5E7EB" } },
-        right: { style: "thin", color: { argb: "FFE5E7EB" } },
-      };
+      // For each month, collect events. When sub-branded, filter to that sub-brand.
+      // Order: campaigns → MICE → starred SG → other SG → venue activities → visitor peaks
+      allMonths.forEach(mi => {
+        const evts = eventsByMonth[mi] || [];
+        const relevant = rowDef.subBrand
+          ? evts.filter(e => e.subBrand === rowDef.subBrand || e.layer === "campaign" || e.layer === "mice" || e.layer === "sg")
+          : evts;
+        const campaigns = relevant.filter(e => e.layer === "campaign").map(e => e.name);
+        const mice = relevant.filter(e => e.layer === "mice").map(e => e.name);
+        const sgStarred = relevant.filter(e => e.layer === "sg" && e.name?.includes("⭐")).map(e => e.name);
+        const sgOther = relevant.filter(e => e.layer === "sg" && !e.name?.includes("⭐")).map(e => e.name);
+        const venueActivities = relevant.filter(e => e.layer === "venue" && (!rowDef.subBrand || e.subBrand === rowDef.subBrand));
+        const peaks = rowIdx === 0 ? getVisitorPeaks(mi) : []; // only show peaks in first row to avoid repetition
+
+        const lines = [];
+        // For sub-brand rows: ONLY show venue activities (not campaigns/MICE/SG — those are group-level context,
+        // not sub-brand activities). For single-row venues: show everything as before.
+        if (rowDef.subBrand) {
+          venueActivities.forEach(e => lines.push(e.undated ? `· ${e.name}` : e.name));
+        } else {
+          campaigns.forEach(n => lines.push(n));
+          mice.forEach(n => lines.push(n));
+          sgStarred.forEach(n => lines.push(n));
+          sgOther.slice(0, 3).forEach(n => lines.push(n));
+          if (sgOther.length > 3) lines.push(`+${sgOther.length - 3} more events`);
+          venueActivities.forEach(e => lines.push(e.undated ? `· ${e.name}` : e.name));
+          if (peaks.length > 0) lines.push(`Peaks: ${peaks.join(", ")}`);
+        }
+
+        const cell = row.getCell(mi + 2);
+        cell.value = lines.join("\n") || "—";
+        cell.font = { size: 9 };
+        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE5E7EB" } },
+          bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+          left: { style: "thin", color: { argb: "FFE5E7EB" } },
+          right: { style: "thin", color: { argb: "FFE5E7EB" } },
+        };
+      });
     });
 
     // ─── SHEET 2: TACTICAL DETAIL ───
@@ -900,9 +1001,9 @@ export default function MarketingCalendar() {
     wsTD.getRow(2).height = 16;
     wsTD.getRow(3).height = 6;
 
-    // Header row (row 4)
-    const tdHeaders = ["Quarter", "Month", "Venue", "Activation", "Anchor / Hook", "Mechanics / Pricing", "Channels", "Partners", "Assets Needed", "Status", "Owner"];
-    const tdWidths = [10, 12, 24, 40, 30, 34, 26, 22, 32, 14, 16];
+    // Header row (row 4) — added "Sub-brand" column after Venue
+    const tdHeaders = ["Quarter", "Month", "Venue", "Sub-brand", "Activation", "Anchor / Hook", "Mechanics / Pricing", "Channels", "Partners", "Assets Needed", "Status", "Owner"];
+    const tdWidths = [10, 12, 20, 22, 40, 30, 34, 26, 22, 32, 14, 16];
     const tdHeaderRow = wsTD.getRow(4);
     tdHeaders.forEach((h, i) => {
       tdHeaderRow.getCell(i + 1).value = h;
@@ -915,23 +1016,25 @@ export default function MarketingCalendar() {
       c.alignment = { vertical: "middle", horizontal: "left" };
       c.border = { bottom: { style: "medium", color: { argb: "FF000000" } } };
     });
-    wsTD.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: 11 } };
+    wsTD.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: 12 } };
 
-    // Data rows — one per activation the tool knows about (campaigns + MICE + starred SG)
+    // Data rows — campaigns + MICE + starred SG + venue activities for this venue
     allMonths.forEach(mi => {
       const evts = eventsByMonth[mi] || [];
       const rowCandidates = [
         ...evts.filter(e => e.layer === "campaign"),
         ...evts.filter(e => e.layer === "mice"),
         ...evts.filter(e => e.layer === "sg" && e.name?.includes("⭐")),
+        ...evts.filter(e => e.layer === "venue"), // venue-specific activities tagged to this zone
       ];
       rowCandidates.forEach(e => {
         const row = wsTD.addRow([
           `Q${Math.floor(mi/3)+1} 26`,
           `${MONTH_SHORT[mi]} 26`,
           venueShortName,
+          e.subBrand || "", // Sub-brand
           e.name || "",
-          e.tagline || "", // Anchor/Hook — campaigns have taglines
+          e.hook || e.tagline || "", // Anchor/Hook — hooks for venue activities, taglines for campaigns
           "", // Mechanics/Pricing — blank
           "", // Channels — blank
           "", // Partners — blank
@@ -1163,6 +1266,7 @@ export default function MarketingCalendar() {
               ["visitor", "Visitors", Users, "#10B981"],
               ["school", "Holidays", GraduationCap, "#14B8A6"],
               ["campaign", "Campaigns", Megaphone, "#EC4899"],
+              ["venue", "Venue", Building2, "#0891B2"],
             ].map(([key, label, Icon, color]) => (
               <button key={key} onClick={() => toggleLayer(key)} className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${layers[key] ? "border-opacity-100" : `${t.chipInactiveBorder} ${t.chipDimOpacity}`}`}
                 style={{ borderColor: layers[key] ? color : undefined, background: layers[key] ? color + "15" : undefined }}>
@@ -1726,11 +1830,14 @@ function DetailPanel({ t, activeHC, item, editOK, onClose, onEdit, onDelete }) {
               {item.start && <div className="flex justify-between"><span className={t.textDim}>Dates</span><span className={t.textBody}>{item.start}{item.end && item.end !== item.start ? ` → ${item.end}` : ""}</span></div>}
               {item.dateStr && <div className="flex justify-between"><span className={t.textDim}>Date</span><span className={t.textBody}>{MONTH_NAMES[mi]} {item.dateStr}</span></div>}
               {item.venue && <div className="flex justify-between"><span className={t.textDim}>Venue</span><span className={`text-right ${t.textBody}`}>{item.venue}</span></div>}
+              {item.subBrand && <div className="flex justify-between"><span className={t.textDim}>Sub-brand</span><span className={`text-right ${t.textBody}`}>{item.subBrand}</span></div>}
+              {item.hook && <div className="flex justify-between"><span className={t.textDim}>Anchor</span><span className={`text-right ${t.textBody}`}>{item.hook}</span></div>}
+              {item.undated && <div className="flex justify-between"><span className={t.textDim}>Timing</span><span className={`text-right italic ${t.textDim}`}>Month-wide (no specific date)</span></div>}
               {item.type && <div className="flex justify-between"><span className={t.textDim}>Type</span><span className={t.textBody}>{item.type}</span></div>}
               {item.cat && <div className="flex justify-between"><span className={t.textDim}>Category</span><span className={`text-right ${t.textBody}`}>{item.cat}</span></div>}
               <div className="flex justify-between"><span className={t.textDim}>Layer</span>
                 <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: color.primary, color: color.text }}>
-                  {layer === "mice" ? "MICE" : layer === "sg" ? "SG Event" : layer === "campaign" ? "Campaign" : layer}
+                  {layer === "mice" ? "MICE" : layer === "sg" ? "SG Event" : layer === "campaign" ? "Campaign" : layer === "venue" ? "Venue Activity" : layer}
                 </span>
               </div>
             </div>
