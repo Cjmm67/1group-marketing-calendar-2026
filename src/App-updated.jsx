@@ -764,60 +764,191 @@ export default function MarketingCalendar() {
   // Excel export — dynamically loads SheetJS on first click so it doesn't bloat initial bundle.
   // Produces .xlsx with two sheets: Events (one row per event) + Daily HC (ratings grid per day).
   // scope="board" exports the full-year filtered view; scope="month" exports only the selected month.
+  // Excel export using exceljs — supports full cell styling (fills, fonts, borders, print setup).
+  // Colours match the 1-HOST v4 xlsx palette: Hot-Hot #C0392B, Hot #E74C3C, Cold #F5B7B1, Cold-Cold #0B3C5D.
+  // Two sheets: "Events" (filterable data table, frozen header, auto-filter, landscape A4 print-ready)
+  // and "Daily HC" (31×12 colour-coded heatmap grid matching the calendar's daily demand view).
   const exportExcel = async (scope) => {
-    let XLSX;
+    let ExcelJS;
     try {
-      XLSX = await import("xlsx");
+      const mod = await import("exceljs");
+      ExcelJS = mod.default || mod;
     } catch (err) {
-      alert("Excel export unavailable — SheetJS failed to load.");
+      alert("Excel export unavailable — exceljs failed to load.");
       return;
     }
     const zoneLabel = selectedZone === "group" ? "1-Group" : activeVenue.shortName;
     const months = scope === "month" ? [selectedMonth]
       : quarter === "all" ? [...Array(12).keys()] : QUARTERS[quarter];
-    // Build Events sheet
-    const rows = [];
+
+    // v4 palette + layer palette (ARGB with FF alpha prefix as exceljs requires)
+    const RATING_FILL = {
+      "Hot-Hot":   { bg: "FFC0392B", fg: "FFFFFFFF" },
+      "Hot":       { bg: "FFE74C3C", fg: "FFFFFFFF" },
+      "Cold":      { bg: "FFF5B7B1", fg: "FF1F2937" },
+      "Cold-Cold": { bg: "FF0B3C5D", fg: "FFFFFFFF" },
+    };
+    const LAYER_FILL = {
+      sg:       { bg: "FFF59E0B", fg: "FF1F2937", label: "SG Event" },
+      mice:     { bg: "FF8B5CF6", fg: "FFFFFFFF", label: "MICE" },
+      campaign: { bg: "FFEC4899", fg: "FFFFFFFF", label: "Campaign" },
+      visitor:  { bg: "FF10B981", fg: "FFFFFFFF", label: "Visitor" },
+    };
+    const HEADER_FILL = { bg: "FF0B3C5D", fg: "FFFFFFFF" };
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "1-Group Marketing Calendar 2026";
+    wb.created = new Date();
+
+    // ─── EVENTS SHEET ───
+    const wsE = wb.addWorksheet(scope === "month" ? MONTH_SHORT[selectedMonth] : "Events", {
+      views: [{ state: "frozen", ySplit: 1 }],
+      pageSetup: {
+        orientation: "landscape",
+        paperSize: 9, // A4
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        printTitlesRow: "1:1",
+        margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+      },
+    });
+    wsE.columns = [
+      { header: "Name", key: "name", width: 38 },
+      { header: "Start", key: "start", width: 12, style: { numFmt: "yyyy-mm-dd" } },
+      { header: "End", key: "end", width: 12, style: { numFmt: "yyyy-mm-dd" } },
+      { header: "Layer", key: "layer", width: 14 },
+      { header: "Type", key: "type", width: 22 },
+      { header: "Venue", key: "venue", width: 22 },
+      { header: "Demand", key: "demand", width: 12 },
+      { header: "Bookings", key: "bookings", width: 10 },
+      { header: "Month", key: "month", width: 11 },
+      { header: "Quarter", key: "quarter", width: 8 },
+      { header: "Peak Visitor Markets", key: "peaks", width: 45 },
+    ];
+    // Header row styling
+    const headerRow = wsE.getRow(1);
+    headerRow.height = 22;
+    headerRow.eachCell(c => {
+      c.font = { bold: true, color: { argb: HEADER_FILL.fg }, size: 11 };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL.bg } };
+      c.alignment = { vertical: "middle", horizontal: "left" };
+      c.border = { bottom: { style: "medium", color: { argb: "FF000000" } } };
+    });
+    // Auto-filter on header
+    wsE.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 11 } };
+
+    // Data rows
     months.forEach(mi => {
       (eventsByMonth[mi] || []).forEach(e => {
-        const startDate = e.start || (e.month !== undefined ? `2026-${String(e.month+1).padStart(2,"0")}-01` : "");
-        const hc = startDate ? activeHC[startDate] : null;
+        const startStr = e.start || (e.month !== undefined ? `2026-${String(e.month+1).padStart(2,"0")}-01` : "");
+        const endStr = e.end || startStr;
+        const hc = startStr ? activeHC[startStr] : null;
+        const ratingLabel = hc ? hc.rating.split("-").map(w => w[0].toUpperCase()+w.slice(1)).join("-") : "";
+        const layerMeta = LAYER_FILL[e.layer] || null;
         const peaks = getVisitorPeaks(mi).join(", ");
-        rows.push({
-          Name: e.name || "",
-          Start: startDate,
-          End: e.end || startDate,
-          Layer: e.layer || "",
-          Type: e.type || e.cat || "",
-          Venue: e.venue || "",
-          "Demand on Start": hc ? hc.rating.replace("-"," ") : "",
-          "Bookings on Start": hc ? hc.count : "",
-          Month: MONTH_NAMES[mi],
-          Quarter: `Q${Math.floor(mi/3)+1}`,
-          "Peak Visitor Markets": peaks,
+        const row = wsE.addRow({
+          name: e.name || "",
+          start: startStr ? new Date(startStr + "T00:00:00") : null,
+          end: endStr ? new Date(endStr + "T00:00:00") : null,
+          layer: layerMeta ? layerMeta.label : (e.layer || ""),
+          type: e.type || e.cat || "",
+          venue: e.venue || "",
+          demand: ratingLabel,
+          bookings: hc ? hc.count : "",
+          month: MONTH_NAMES[mi],
+          quarter: `Q${Math.floor(mi/3)+1}`,
+          peaks: peaks,
         });
+        row.alignment = { vertical: "middle" };
+        // Colour the Layer cell
+        if (layerMeta) {
+          const cell = row.getCell("layer");
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: layerMeta.bg } };
+          cell.font = { color: { argb: layerMeta.fg }, bold: true };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+        }
+        // Colour the Demand cell
+        const ratingMeta = RATING_FILL[ratingLabel];
+        if (ratingMeta) {
+          const cell = row.getCell("demand");
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ratingMeta.bg } };
+          cell.font = { color: { argb: ratingMeta.fg }, bold: true };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+        }
       });
     });
-    const wb = XLSX.utils.book_new();
-    const wsEvents = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, wsEvents, scope === "month" ? MONTH_SHORT[selectedMonth] : "Events");
-    // Build Daily HC sheet — rows = days 1..31, cols = Jan..Dec (or just selected month)
-    const hcRows = [];
+
+    // ─── DAILY HC SHEET ───
+    const wsHC = wb.addWorksheet("Daily HC", {
+      views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
+      pageSetup: {
+        orientation: "landscape",
+        paperSize: 9,
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 1,
+        printTitlesRow: "1:1",
+        printTitlesColumn: "A:A",
+        margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+      },
+    });
+    // Header row: Day + month abbreviations for the requested months
+    const hcHeaders = ["Day", ...months.map(mi => MONTH_SHORT[mi])];
+    wsHC.addRow(hcHeaders);
+    wsHC.getColumn(1).width = 6;
+    months.forEach((mi, idx) => { wsHC.getColumn(idx + 2).width = 10; });
+    const hcHead = wsHC.getRow(1);
+    hcHead.height = 22;
+    hcHead.eachCell(c => {
+      c.font = { bold: true, color: { argb: HEADER_FILL.fg }, size: 11 };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL.bg } };
+      c.alignment = { vertical: "middle", horizontal: "center" };
+      c.border = { bottom: { style: "medium", color: { argb: "FF000000" } } };
+    });
+    // Day rows
     for (let d = 1; d <= 31; d++) {
-      const row = { Day: d };
+      const rowData = [d];
       months.forEach(mi => {
+        if (d > daysInMonth(mi)) { rowData.push(""); return; }
         const key = dateStr(mi, d);
-        if (d > daysInMonth(mi)) { row[MONTH_SHORT[mi]] = ""; return; }
         const hc = activeHC[key];
-        row[MONTH_SHORT[mi]] = hc ? `${hc.rating.replace("-"," ")} (${hc.count})` : "";
+        rowData.push(hc ? hc.count : 0);
       });
-      hcRows.push(row);
+      const row = wsHC.addRow(rowData);
+      row.height = 18;
+      row.getCell(1).font = { bold: true, color: { argb: "FF374151" } };
+      row.getCell(1).alignment = { vertical: "middle", horizontal: "center" };
+      row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+      months.forEach((mi, idx) => {
+        if (d > daysInMonth(mi)) return;
+        const key = dateStr(mi, d);
+        const hc = activeHC[key];
+        if (!hc) return;
+        const ratingLabel = hc.rating.split("-").map(w => w[0].toUpperCase()+w.slice(1)).join("-");
+        const meta = RATING_FILL[ratingLabel];
+        if (meta) {
+          const cell = row.getCell(idx + 2);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: meta.bg } };
+          cell.font = { color: { argb: meta.fg }, bold: true, size: 11 };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+        }
+      });
     }
-    const wsHC = XLSX.utils.json_to_sheet(hcRows);
-    XLSX.utils.book_append_sheet(wb, wsHC, "Daily HC");
-    const filename = scope === "month"
+
+    // ─── WRITE & DOWNLOAD ───
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = scope === "month"
       ? `1group-calendar-${MONTH_SHORT[selectedMonth].toLowerCase()}-2026-${zoneLabel.toLowerCase().replace(/\s+/g,"-")}.xlsx`
       : `1group-calendar-2026-${zoneLabel.toLowerCase().replace(/\s+/g,"-")}.xlsx`;
-    XLSX.writeFile(wb, filename);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (!loaded) return <div className={`flex items-center justify-center h-screen ${t.page}`}><div className="animate-pulse text-lg">Loading calendar...</div></div>;
