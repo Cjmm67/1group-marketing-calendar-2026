@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer, Lock, LogOut, Shield, KeyRound, User as UserIcon, AlertCircle } from "lucide-react";
+import { Calendar, Plus, Edit, Trash2, Flame, Snowflake, X, Search, Copy, RotateCcw, Eye, EyeOff, BarChart3, Grid3X3, MapPin, Users, GraduationCap, Megaphone, ChevronLeft, ChevronRight, Check, TrendingUp, Star, Building2, Thermometer, Lock, LogOut, Shield, KeyRound, User as UserIcon, AlertCircle, Download } from "lucide-react";
 
 // ─── AUTH: USERS + ACCESS CODES ───
 // NOTE: Client-side soft gate only. Anyone with DevTools can read this file.
@@ -761,6 +761,65 @@ export default function MarketingCalendar() {
     alert("Summary copied!");
   };
 
+  // Excel export — dynamically loads SheetJS on first click so it doesn't bloat initial bundle.
+  // Produces .xlsx with two sheets: Events (one row per event) + Daily HC (ratings grid per day).
+  // scope="board" exports the full-year filtered view; scope="month" exports only the selected month.
+  const exportExcel = async (scope) => {
+    let XLSX;
+    try {
+      XLSX = await import("xlsx");
+    } catch (err) {
+      alert("Excel export unavailable — SheetJS failed to load.");
+      return;
+    }
+    const zoneLabel = selectedZone === "group" ? "1-Group" : activeVenue.shortName;
+    const months = scope === "month" ? [selectedMonth]
+      : quarter === "all" ? [...Array(12).keys()] : QUARTERS[quarter];
+    // Build Events sheet
+    const rows = [];
+    months.forEach(mi => {
+      (eventsByMonth[mi] || []).forEach(e => {
+        const startDate = e.start || (e.month !== undefined ? `2026-${String(e.month+1).padStart(2,"0")}-01` : "");
+        const hc = startDate ? activeHC[startDate] : null;
+        const peaks = getVisitorPeaks(mi).join(", ");
+        rows.push({
+          Name: e.name || "",
+          Start: startDate,
+          End: e.end || startDate,
+          Layer: e.layer || "",
+          Type: e.type || e.cat || "",
+          Venue: e.venue || "",
+          "Demand on Start": hc ? hc.rating.replace("-"," ") : "",
+          "Bookings on Start": hc ? hc.count : "",
+          Month: MONTH_NAMES[mi],
+          Quarter: `Q${Math.floor(mi/3)+1}`,
+          "Peak Visitor Markets": peaks,
+        });
+      });
+    });
+    const wb = XLSX.utils.book_new();
+    const wsEvents = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, wsEvents, scope === "month" ? MONTH_SHORT[selectedMonth] : "Events");
+    // Build Daily HC sheet — rows = days 1..31, cols = Jan..Dec (or just selected month)
+    const hcRows = [];
+    for (let d = 1; d <= 31; d++) {
+      const row = { Day: d };
+      months.forEach(mi => {
+        const key = dateStr(mi, d);
+        if (d > daysInMonth(mi)) { row[MONTH_SHORT[mi]] = ""; return; }
+        const hc = activeHC[key];
+        row[MONTH_SHORT[mi]] = hc ? `${hc.rating.replace("-"," ")} (${hc.count})` : "";
+      });
+      hcRows.push(row);
+    }
+    const wsHC = XLSX.utils.json_to_sheet(hcRows);
+    XLSX.utils.book_append_sheet(wb, wsHC, "Daily HC");
+    const filename = scope === "month"
+      ? `1group-calendar-${MONTH_SHORT[selectedMonth].toLowerCase()}-2026-${zoneLabel.toLowerCase().replace(/\s+/g,"-")}.xlsx`
+      : `1group-calendar-2026-${zoneLabel.toLowerCase().replace(/\s+/g,"-")}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
   if (!loaded) return <div className={`flex items-center justify-center h-screen ${t.page}`}><div className="animate-pulse text-lg">Loading calendar...</div></div>;
 
   if (!user) return <SignIn t={t} onSignIn={handleSignIn} />;
@@ -803,6 +862,8 @@ export default function MarketingCalendar() {
               </div>
               {editOK && <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-md"><Plus className="w-3.5 h-3.5" /> Add</button>}
               <button onClick={copySummary} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><Copy className="w-3.5 h-3.5" /> Copy</button>
+              <button onClick={() => exportExcel("board")} title="Export full-year board to Excel" className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><Download className="w-3.5 h-3.5" /> Board .xlsx</button>
+              {view === "month" && <button onClick={() => exportExcel("month")} title={`Export ${MONTH_NAMES[selectedMonth]} view to Excel`} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><Download className="w-3.5 h-3.5" /> Month .xlsx</button>}
               {codesOK && <button onClick={() => setShowVenueCodes(true)} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><KeyRound className="w-3.5 h-3.5" /> Venue Codes</button>}
               {editOK && <button onClick={handleReset} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><RotateCcw className="w-3.5 h-3.5" /> Reset</button>}
               <button onClick={handleSignOut} className={`flex items-center gap-1 ${t.surfaceStrong} ${t.surfaceStrongHover} text-xs px-3 py-1.5 rounded-md`}><LogOut className="w-3.5 h-3.5" /> Sign out</button>
