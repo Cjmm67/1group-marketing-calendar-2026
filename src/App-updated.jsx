@@ -570,7 +570,6 @@ const SEED_VENUE_EVENTS = [
 
   // Flowerhill · Camille
   {id:"vn-fh-10",name:"Seasonal Dinner Experience: Sakura Bloom",venue:"flowerhill",subBrand:"Camille",month:3,undated:true,hook:"",layer:"venue"},
-  {id:"vn-fh-11",name:"Brunch of Roses (Mother's Day)",venue:"flowerhill",subBrand:"Camille",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · 1-Group 20th Anniversary",layer:"venue"},
   {id:"vn-fh-12",name:"Seasonal Dinner Experience: Jardin",venue:"flowerhill",subBrand:"Camille",month:5,undated:true,hook:"",layer:"venue"},
   {id:"vn-fh-13",name:"Bridal Fair (Jun)",venue:"flowerhill",subBrand:"Camille",month:5,undated:true,hook:"Wedding season",layer:"venue"},
   {id:"vn-fh-14",name:"Bridal Fair (Jul)",venue:"flowerhill",subBrand:"Camille",month:6,undated:true,hook:"Wedding enquiry capture",layer:"venue"},
@@ -578,7 +577,6 @@ const SEED_VENUE_EVENTS = [
   {id:"vn-fh-16",name:"White Truffle & Wine Menu",venue:"flowerhill",subBrand:"Camille",month:10,undated:true,hook:"White truffle season",layer:"venue"},
 
   // Flowerhill · WAFU by Wildseed (Day) [a.k.a. WSC = Wildseed Cafe]
-  {id:"vn-fh-17",name:"Brunch of Roses (Mother's Day)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · 1-Group 20th Anniversary",layer:"venue"},
   {id:"vn-fh-18",name:"WAFU by Wildseed Menu Launch & Kakigori Launch",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",start:"2026-06-01",end:"2026-06-01",hook:"Neo-Japanese Menu",layer:"venue"},
   {id:"vn-fh-19",name:"Farmers / Pet Market (Jul)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",month:6,undated:true,hook:"Pet pillar · weekend footfall",layer:"venue"},
   {id:"vn-fh-20",name:"Zen-Floral High Tea Launch",venue:"flowerhill",subBrand:"WAFU by Wildseed (Day)",month:6,undated:true,hook:"Afternoon dining activation",layer:"venue"},
@@ -682,9 +680,30 @@ export default function MarketingCalendar() {
         // other events are preserved. To intentionally remove a seed event, the user must delete
         // it AFTER this merge (which creates a user-version that persists).
         const savedVenueEvents = await storage.get("calendar-venue-events");
-        if (savedVenueEvents?.value) {
+        // ─── ONE-TIME CLEANUP v1: remove all "Brunch of Roses" entries from storage ───
+        // Triggered after a duplicates issue during testing. Runs once per browser. The
+        // cleanup-v1 flag prevents re-runs. Seed events vn-fh-11 and vn-fh-17 were also
+        // removed from SEED_VENUE_EVENTS itself in this commit, so the auto-merge logic
+        // below won't re-add them.
+        const cleanupFlag = await storage.get("venue-cleanup-v1");
+        let parsedAfterCleanup = null;
+        if (savedVenueEvents?.value && !cleanupFlag?.value) {
           try {
             const parsed = JSON.parse(savedVenueEvents.value);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter(e => !(e.name && e.name.includes("Brunch of Roses")));
+              if (cleaned.length !== parsed.length) {
+                try { await storage.set("calendar-venue-events", JSON.stringify(cleaned)); } catch {}
+                parsedAfterCleanup = cleaned;
+              }
+            }
+          } catch {}
+          try { await storage.set("venue-cleanup-v1", "done"); } catch {}
+        }
+        // ─── END CLEANUP ───
+        if (savedVenueEvents?.value) {
+          try {
+            const parsed = parsedAfterCleanup || JSON.parse(savedVenueEvents.value);
             if (Array.isArray(parsed)) {
               // Detect missing seed events by ID (only vn-fh-* ids are seed-originated).
               const storedIds = new Set(parsed.map(e => e.id));
@@ -1463,7 +1482,6 @@ export default function MarketingCalendar() {
           subBrand: e.subBrand || "",
           start: e.start || "2026-01-01",
           end: e.end || "2026-01-01",
-          undated: !!e.undated,
           hook: "",
           type: e.type || "",
         });
@@ -1996,25 +2014,19 @@ function EventFormModal({ t, event, isPrefill, onSave, onClose }) {
 
   const [form, setForm] = useState(event ? { ...event, venue: normaliseVenue(event.venue) } : {
     name: "", layer: "sg", start: "2026-01-01", end: "2026-01-01", type: "", venue: "", cat: "", dateStr: "",
-    subBrand: "", hook: "", undated: false,
+    subBrand: "", hook: "",
   });
 
   const handleSubmit = () => {
     if (!form.name) return;
-    // For undated venue events, strip start/end; store month index (derived from current start).
-    // For dated events (all other layers + dated venue events), keep start/end.
+    // All events require start/end. Editing an existing undated event will convert it
+    // to dated (start/end now populated, undated flag stripped).
     const payload = { ...form };
-    if (payload.layer === "venue" && payload.undated) {
-      payload.month = getMonthIndex(payload.start);
-      delete payload.start;
-      delete payload.end;
-    } else {
-      payload.month = getMonthIndex(payload.start);
-    }
+    payload.month = getMonthIndex(payload.start);
+    delete payload.undated; // stripped: form no longer offers undated option
     // Clean: remove empty-string optionals so JSON stays tidy.
     if (!payload.subBrand) delete payload.subBrand;
     if (!payload.hook) delete payload.hook;
-    if (!payload.undated) delete payload.undated;
     onSave(payload);
   };
 
@@ -2057,30 +2069,16 @@ function EventFormModal({ t, event, isPrefill, onSave, onClose }) {
         {isVenue && (
           <input value={form.hook || ""} onChange={e => setForm({ ...form, hook: e.target.value })} placeholder="Anchor / Hook (e.g. Mother's Day · 1G20)" className={inputCls} />
         )}
-        {isVenue && (
-          <label className={`flex items-center gap-2 text-sm ${t.textBody} cursor-pointer`}>
-            <input type="checkbox" checked={!!form.undated} onChange={e => setForm({ ...form, undated: e.target.checked })} className="w-4 h-4" />
-            <span>Undated — runs across the whole month (no specific day)</span>
-          </label>
-        )}
-        {(!isVenue || !form.undated) && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={`text-xs ${t.textDim}`}>Start</label>
-              <input type="date" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} className={inputCls} />
-            </div>
-            <div>
-              <label className={`text-xs ${t.textDim}`}>End</label>
-              <input type="date" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} />
-            </div>
-          </div>
-        )}
-        {isVenue && form.undated && (
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={`text-xs ${t.textDim}`}>Month (pick any day in the target month)</label>
+            <label className={`text-xs ${t.textDim}`}>Start</label>
             <input type="date" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} className={inputCls} />
           </div>
-        )}
+          <div>
+            <label className={`text-xs ${t.textDim}`}>End</label>
+            <input type="date" value={form.end} onChange={e => setForm({ ...form, end: e.target.value })} className={inputCls} />
+          </div>
+        </div>
         {!isVenue && (
           <input value={form.type || ""} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type (Concert, Trade Show, etc.)" className={inputCls} />
         )}
