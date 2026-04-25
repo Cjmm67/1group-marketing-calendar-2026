@@ -636,6 +636,7 @@ export default function MarketingCalendar() {
   });
   const [detailItem, setDetailItem] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [prefillEvent, setPrefillEvent] = useState(null); // pre-fill seed for Add form when opened from a detail panel
   const [customEvents, setCustomEvents] = useState([]);
   const [venueEvents, setVenueEvents] = useState(SEED_VENUE_EVENTS); // user-editable copy of venue activities
   const [editingEvent, setEditingEvent] = useState(null);
@@ -1451,14 +1452,30 @@ export default function MarketingCalendar() {
         {view === "heatmap" && <HeatmapView t={t} activeHC={activeHC} activeVenue={activeVenue} layers={layers} quarter={quarter} onDetail={setDetailItem} />}
       </div>
 
-      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} editOK={editOK} canEditEvent={canEditEvent} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} />}
+      {detailItem && <DetailPanel t={t} activeHC={activeHC} item={detailItem} editOK={editOK} canEditEvent={canEditEvent} onClose={() => setDetailItem(null)} onEdit={(e) => { setDetailItem(null); setEditingEvent(e); }} onDelete={deleteEvent} onAddSimilar={(e) => {
+        // Pre-fill Add form with the viewed event's context (venue, sub-brand, layer, dates) but clear Name.
+        setDetailItem(null);
+        setShowAddForm(true);
+        setPrefillEvent({
+          name: "",
+          layer: e.layer || "venue",
+          venue: e.venue || "",
+          subBrand: e.subBrand || "",
+          start: e.start || "2026-01-01",
+          end: e.end || "2026-01-01",
+          undated: !!e.undated,
+          hook: "",
+          type: e.type || "",
+        });
+      }} />}
 
       {editOK && (showAddForm || editingEvent) && (
         <EventFormModal
           t={t}
-          event={editingEvent}
+          event={editingEvent || prefillEvent}
+          isPrefill={!editingEvent && !!prefillEvent}
           onSave={editingEvent ? updateEvent : addEvent}
-          onClose={() => { setShowAddForm(false); setEditingEvent(null); }}
+          onClose={() => { setShowAddForm(false); setEditingEvent(null); setPrefillEvent(null); }}
         />
       )}
 
@@ -1791,7 +1808,7 @@ function HeatmapView({ t, activeHC, activeVenue, layers, quarter, onDetail }) {
 
 // ─── DETAIL PANEL ───
 
-function DetailPanel({ t, activeHC, item, editOK, canEditEvent, onClose, onEdit, onDelete }) {
+function DetailPanel({ t, activeHC, item, editOK, canEditEvent, onClose, onEdit, onDelete, onAddSimilar }) {
   const layer = item.layer || "sg";
   const color = LAYER_COLORS[layer] || LAYER_COLORS.sg;
   const canEdit = canEditEvent ? canEditEvent(item) : item.id?.startsWith("custom-");
@@ -1947,6 +1964,12 @@ function DetailPanel({ t, activeHC, item, editOK, canEditEvent, onClose, onEdit,
             </div>
           )}
 
+          {editOK && onAddSimilar && (
+            <div className="pt-2">
+              <button onClick={() => onAddSimilar(item)} className="flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-2 rounded-md w-full"><Plus className="w-3.5 h-3.5" /> Add Event</button>
+            </div>
+          )}
+
           {canEdit && editOK && (
             <div className="flex gap-2 pt-2">
               <button onClick={() => onEdit(item)} className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded-md flex-1"><Edit className="w-3.5 h-3.5" /> Edit</button>
@@ -1961,7 +1984,7 @@ function DetailPanel({ t, activeHC, item, editOK, canEditEvent, onClose, onEdit,
 
 // ─── EVENT FORM MODAL ───
 
-function EventFormModal({ t, event, onSave, onClose }) {
+function EventFormModal({ t, event, isPrefill, onSave, onClose }) {
   // Backward compat: if editing a legacy custom event with a display-name venue
   // (e.g. "1-Flowerhill"), map it back to its slug ("flowerhill") on load.
   const DISPLAY_TO_SLUG = {
@@ -2004,7 +2027,7 @@ function EventFormModal({ t, event, onSave, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className={`absolute inset-0 ${t.modalBg}`} />
       <div className={`relative ${t.panel} border rounded-xl p-5 w-full max-w-md space-y-3 max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
-        <h3 className={`font-bold text-sm ${t.textHead}`}>{event ? "Edit Event" : "Add Event"}</h3>
+        <h3 className={`font-bold text-sm ${t.textHead}`}>{event && !isPrefill ? "Edit Event" : "Add Event"}</h3>
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Event name *" className={inputCls} />
         <select value={form.layer} onChange={e => setForm({ ...form, layer: e.target.value })} className={inputCls}>
           <option value="sg">SG Event</option>
