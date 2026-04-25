@@ -532,6 +532,7 @@ const CAMPAIGNS = [
 const VENUE_SUBBRANDS = {
   flowerhill: ["Camille", "WAFU by Wildseed (Day)", "WAFU by Wildseed (Night)", "Estate"],
   altitude: ["1-Altitude Coast", "Sol & Ora"],
+  atico: ["FIRE", "FLNT", "LOUNGE"],
 };
 
 // SEED_VENUE_EVENTS: initial dataset, loaded into user's browser storage on first run.
@@ -618,6 +619,54 @@ const SEED_VENUE_EVENTS = [
   {id:"vn-ac-16",name:"World Pasta Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-10-25",end:"2026-10-25",hook:"World Pasta Day",layer:"venue"},
   {id:"vn-ac-17",name:"Spain's National Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-10-12",end:"2026-10-12",hook:"Spain's National Day",layer:"venue"},
   {id:"vn-ac-18",name:"Family Day (November)",venue:"altitude",subBrand:"Sol & Ora",month:10,undated:true,hook:"Family Day activation",layer:"venue"},
+
+  // 1-Atico (atico venue) — sub-brands FIRE, FLNT, LOUNGE
+  // Source: 1-ATICO Marketing Calendar 2026 (PDF). Strict 2026 scope.
+  // Dropped per dedup rule (already in CAMPAIGNS or PUBLIC_HOLIDAYS):
+  //   Sip & Savour (Mar), Summertime Madness (Jun-Jul), Let's Go Local (Aug),
+  //   Oktoberfest (Oct), Christmas (Dec), NYE Countdown (Dec), all PHs (CNY,
+  //   Hari Raya, Vesak, Labour Day, NDP, Deepavali, etc.).
+  // Skipped per user direction: "Items to Shoot" production dates,
+  //   "External" KOL / Partners ops rows, Pride (no specific activation).
+
+  // Atico · FIRE
+  {id:"vn-at-1",name:"Miércoles Noche Menu",venue:"atico",subBrand:"FIRE",month:1,undated:true,hook:"Every Wednesday $75++ PP, beverage add-on $15++",layer:"venue"},
+  {id:"vn-at-2",name:"Love on the Skyline (Valentine's)",venue:"atico",subBrand:"FIRE",start:"2026-02-14",end:"2026-02-15",hook:"5-course communal Valentine's dinner",layer:"venue"},
+  {id:"vn-at-3",name:"New Communal Easter Brunch",venue:"atico",subBrand:"FIRE",start:"2026-04-05",end:"2026-04-05",hook:"Communal Easter Sunday brunch",layer:"venue"},
+  {id:"vn-at-4",name:"Mother's Day New Menu",venue:"atico",subBrand:"FIRE",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · partners",layer:"venue"},
+  {id:"vn-at-5",name:"Father's Day Menu",venue:"atico",subBrand:"FIRE",start:"2026-06-21",end:"2026-06-21",hook:"Father's Day",layer:"venue"},
+  {id:"vn-at-6",name:"Argentina Independence Day",venue:"atico",subBrand:"FIRE",start:"2026-07-09",end:"2026-07-09",hook:"Argentina Independence Day",layer:"venue"},
+  {id:"vn-at-7",name:"The Local Table (NDP)",venue:"atico",subBrand:"FIRE",start:"2026-08-09",end:"2026-08-09",hook:"National Day · The Local Table",layer:"venue"},
+  {id:"vn-at-8",name:"GPSS Programming",venue:"atico",subBrand:"FIRE",start:"2026-10-02",end:"2026-10-11",hook:"F1 weekend window",layer:"venue"},
+  {id:"vn-at-9",name:"National Asado Day",venue:"atico",subBrand:"FIRE",start:"2026-10-11",end:"2026-10-11",hook:"National Asado Day",layer:"venue"},
+  {id:"vn-at-10",name:"Halloween — Murder Mystery Dinner",venue:"atico",subBrand:"FIRE",start:"2026-10-31",end:"2026-10-31",hook:"Halloween",layer:"venue"},
+  {id:"vn-at-11",name:"Thanksgiving Menu",venue:"atico",subBrand:"FIRE",start:"2026-11-26",end:"2026-11-26",hook:"US Thanksgiving (4th Thu)",layer:"venue"},
+
+  // Atico · FLNT
+  {id:"vn-at-12",name:"Yu Sheng Dine-in",venue:"atico",subBrand:"FLNT",start:"2026-02-02",end:"2026-03-06",hook:"CNY in-restaurant Yu Sheng",layer:"venue"},
+  {id:"vn-at-13",name:"Love in the Clouds (Valentine's)",venue:"atico",subBrand:"FLNT",start:"2026-02-14",end:"2026-02-15",hook:"6-course Valentine's dinner",layer:"venue"},
+  {id:"vn-at-14",name:"New Set Lunch Sakura Season Menu",venue:"atico",subBrand:"FLNT",month:2,undated:true,hook:"Sakura season",layer:"venue"},
+  {id:"vn-at-15",name:"Sakura High Tea",venue:"atico",subBrand:"FLNT",month:2,undated:true,hook:"Sakura season",layer:"venue"},
+  {id:"vn-at-16",name:"Mother's Day · Golden Week Promo (ION)",venue:"atico",subBrand:"FLNT",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day + Golden Week",layer:"venue"},
+  {id:"vn-at-17",name:"Father's Day",venue:"atico",subBrand:"FLNT",start:"2026-06-21",end:"2026-06-21",hook:"Father's Day",layer:"venue"},
+  {id:"vn-at-18",name:"Tanabata (Star Festival)",venue:"atico",subBrand:"FLNT",start:"2026-07-07",end:"2026-07-07",hook:"Tanabata · Japanese star festival",layer:"venue"},
+  {id:"vn-at-19",name:"The Local Table (NDP)",venue:"atico",subBrand:"FLNT",start:"2026-08-09",end:"2026-08-09",hook:"National Day",layer:"venue"},
+  {id:"vn-at-20",name:"GPSS Programming",venue:"atico",subBrand:"FLNT",start:"2026-10-02",end:"2026-10-11",hook:"F1 weekend window",layer:"venue"},
+  {id:"vn-at-21",name:"Sake Day",venue:"atico",subBrand:"FLNT",start:"2026-10-01",end:"2026-10-01",hook:"World Sake Day",layer:"venue"},
+  {id:"vn-at-22",name:"Halloween — Murder Mystery Dinner",venue:"atico",subBrand:"FLNT",start:"2026-10-31",end:"2026-10-31",hook:"Halloween",layer:"venue"},
+  {id:"vn-at-23",name:"Postcards Dinner",venue:"atico",subBrand:"FLNT",month:10,undated:true,hook:"Postcards-themed dinner",layer:"venue"},
+
+  // Atico · LOUNGE
+  {id:"vn-at-24",name:"Roll for the Pour",venue:"atico",subBrand:"LOUNGE",month:1,undated:true,hook:"$48++ free-flow, roll a 6 for 50% off",layer:"venue"},
+  {id:"vn-at-25",name:"Love, Sky High Valentine's High Tea",venue:"atico",subBrand:"LOUNGE",start:"2026-02-05",end:"2026-02-15",hook:"Valentine's high tea",layer:"venue"},
+  {id:"vn-at-26",name:"Martini Project Opening",venue:"atico",subBrand:"LOUNGE",month:2,undated:true,hook:"Bar-within-a-bar opening · Curious Creatures & Oo La Lab",layer:"venue"},
+  {id:"vn-at-27",name:"Mother's Day High Tea x Clipper Tea",venue:"atico",subBrand:"LOUNGE",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day · Clipper Tea collab",layer:"venue"},
+  {id:"vn-at-28",name:"Father's Day · Tapas Day",venue:"atico",subBrand:"LOUNGE",start:"2026-06-21",end:"2026-06-21",hook:"Father's Day",layer:"venue"},
+  {id:"vn-at-29",name:"World Tapas Day",venue:"atico",subBrand:"LOUNGE",start:"2026-06-16",end:"2026-06-16",hook:"World Tapas Day",layer:"venue"},
+  {id:"vn-at-30",name:"World Gin Day",venue:"atico",subBrand:"LOUNGE",start:"2026-06-13",end:"2026-06-13",hook:"World Gin Day · 2nd Sat of June",layer:"venue"},
+  {id:"vn-at-31",name:"Fireworks Menu / High Tea Collab (NDP)",venue:"atico",subBrand:"LOUNGE",start:"2026-08-09",end:"2026-08-09",hook:"NDP fireworks viewing menu",layer:"venue"},
+  {id:"vn-at-32",name:"GPSS Programming",venue:"atico",subBrand:"LOUNGE",start:"2026-10-02",end:"2026-10-11",hook:"F1 weekend window",layer:"venue"},
+  {id:"vn-at-33",name:"Halloween — Murder Mystery Dinner",venue:"atico",subBrand:"LOUNGE",start:"2026-10-31",end:"2026-10-31",hook:"Halloween",layer:"venue"},
 ];
 
 // ─── COLOURS ───
