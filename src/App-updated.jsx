@@ -680,25 +680,35 @@ export default function MarketingCalendar() {
         // other events are preserved. To intentionally remove a seed event, the user must delete
         // it AFTER this merge (which creates a user-version that persists).
         const savedVenueEvents = await storage.get("calendar-venue-events");
-        // ─── ONE-TIME CLEANUP v1: remove all "Brunch of Roses" entries from storage ───
-        // Triggered after a duplicates issue during testing. Runs once per browser. The
-        // cleanup-v1 flag prevents re-runs. Seed events vn-fh-11 and vn-fh-17 were also
-        // removed from SEED_VENUE_EVENTS itself in this commit, so the auto-merge logic
-        // below won't re-add them.
-        const cleanupFlag = await storage.get("venue-cleanup-v1");
+        // ─── ONE-TIME CLEANUP v2: remove all "Brunch of Roses" entries (by name OR by ID) ───
+        // v2 supersedes v1: even if v1 already ran, this runs once. Catches edge cases where
+        // entries had different names than the literal "Brunch of Roses" string. Diagnostic
+        // console.log lets users open DevTools and verify what's in their storage.
+        const cleanupFlag = await storage.get("venue-cleanup-v2");
         let parsedAfterCleanup = null;
         if (savedVenueEvents?.value && !cleanupFlag?.value) {
           try {
             const parsed = JSON.parse(savedVenueEvents.value);
             if (Array.isArray(parsed)) {
-              const cleaned = parsed.filter(e => !(e.name && e.name.includes("Brunch of Roses")));
+              const KILL_NAMES = ["Brunch of Roses"]; // case-sensitive substring match
+              const KILL_IDS = new Set(["vn-fh-11", "vn-fh-17"]); // pre-removal seed IDs
+              const before = parsed.length;
+              const cleaned = parsed.filter(e => {
+                if (KILL_IDS.has(e.id)) return false;
+                if (e.name && KILL_NAMES.some(k => e.name.includes(k))) return false;
+                return true;
+              });
+              const removed = before - cleaned.length;
+              console.log(`[venue-cleanup-v2] storage had ${before} venue events; removed ${removed}; remaining ${cleaned.length}`);
               if (cleaned.length !== parsed.length) {
                 try { await storage.set("calendar-venue-events", JSON.stringify(cleaned)); } catch {}
                 parsedAfterCleanup = cleaned;
               }
             }
-          } catch {}
-          try { await storage.set("venue-cleanup-v1", "done"); } catch {}
+          } catch (err) {
+            console.log("[venue-cleanup-v2] error parsing storage:", err);
+          }
+          try { await storage.set("venue-cleanup-v2", "done"); } catch {}
         }
         // ─── END CLEANUP ───
         if (savedVenueEvents?.value) {
@@ -1613,10 +1623,28 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
   const offset = startDay === 0 ? 6 : startDay - 1;
   const isDay = t.name === "day";
 
+  // Split events into dated (placed on specific days) and undated (shown as a banner above the grid).
+  // Undated events have e.undated === true OR e.month set with no e.start (synthetic start/end may have been added by allEvents).
+  // Defensive: we ALSO treat any event whose start === month-day-1 AND end === month-last-day as undated, since
+  // that's the synthetic range allEvents creates from undated source events.
+  const undatedEvents = useMemo(() => {
+    const lastDay = days;
+    const monthStart = `2026-${String(month + 1).padStart(2, "0")}-01`;
+    const monthEnd = `2026-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return events.filter(e => {
+      if (e.undated) return true;
+      if (e.start === monthStart && e.end === monthEnd) return true; // synthetic whole-month range
+      return false;
+    });
+  }, [events, days, month]);
+
   const dayEvents = useMemo(() => {
     const map = {};
     for (let d = 1; d <= days; d++) map[d] = [];
+    const undatedIds = new Set(undatedEvents.map(e => e.id));
     events.forEach(e => {
+      // Skip undated events — they go in the banner, not on specific days.
+      if (undatedIds.has(e.id)) return;
       if (e.dateStr) {
         const parts = e.dateStr.replace(/ *\(.*\)/, "").split("-");
         const startD = parseInt(parts[0]);
@@ -1635,7 +1663,7 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
       }
     });
     return map;
-  }, [events, days]);
+  }, [events, days, undatedEvents]);
 
   return (
     <div>
@@ -1644,6 +1672,24 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
         <h2 className={`text-lg font-bold ${t.textHead}`}>{MONTH_NAMES[month]} 2026</h2>
         <button onClick={() => setMonth(Math.min(11, month + 1))} className={`p-2 ${t.surface} rounded-lg ${t.surfaceHover}`}><ChevronRight className="w-4 h-4" /></button>
       </div>
+      {undatedEvents.length > 0 && (
+        <div className={`mb-3 p-2 rounded-lg ${t.panel} border`}>
+          <div className={`text-xs font-medium ${t.textDim} mb-1`}>Month-wide (no specific date)</div>
+          <div className="flex flex-wrap gap-1">
+            {undatedEvents.map(e => {
+              const c = LAYER_COLORS[e.layer || "sg"];
+              return (
+                <button key={e.id} onClick={() => onDetail(e)}
+                  className="text-xs px-2 py-1 rounded cursor-pointer truncate"
+                  style={{ background: c.bg || c.primary + "20", color: c.primary, maxWidth: "200px" }}
+                  title={e.name}>
+                  {e.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-7 gap-1">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
           <div key={d} className={`text-center text-xs ${t.textDim} py-1 font-medium`}>{d}</div>
