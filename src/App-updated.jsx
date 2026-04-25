@@ -531,6 +531,7 @@ const CAMPAIGNS = [
 // Venues not listed here render as a single row (default behaviour, unchanged).
 const VENUE_SUBBRANDS = {
   flowerhill: ["Camille", "WAFU by Wildseed (Day)", "WAFU by Wildseed (Night)", "Estate"],
+  altitude: ["1-Altitude Coast", "Sol & Ora"],
 };
 
 // SEED_VENUE_EVENTS: initial dataset, loaded into user's browser storage on first run.
@@ -588,6 +589,35 @@ const SEED_VENUE_EVENTS = [
   {id:"vn-fh-24",name:"Wagyu Grill Bar · Pit Master Collab",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:4,undated:true,hook:"Wagyu menu hero",layer:"venue"},
   {id:"vn-fh-25",name:"Sentosa GrillFest",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:6,undated:true,hook:"SDC GrillFest (island-wide)",layer:"venue"},
   {id:"vn-fh-26",name:"Wagyu Grill Bar · Pit Master Collab (2nd edition)",venue:"flowerhill",subBrand:"WAFU by Wildseed (Night)",month:8,undated:true,hook:"Repeat collab format",layer:"venue"},
+
+  // 1-Altitude Coast (altitude venue) — sub-brand "1-Altitude Coast"
+  // Source: 1-ALTITUDE_COAST_2026_CALENDAR_1 (Image 1, Mar 25–Feb 26 fiscal calendar).
+  // Strict 2026 scope: only events whose image date falls in Jan 26 / Feb 26 are included.
+  // Dropped per dedup: Wellness (Jan 26 → in CAMPAIGNS), Sip & Savour (Feb 26 → in CAMPAIGNS).
+  {id:"vn-ac-1",name:"World Bartender Day",venue:"altitude",subBrand:"1-Altitude Coast",start:"2026-02-24",end:"2026-02-24",hook:"World Bartender Day",layer:"venue"},
+
+  // 1-Altitude Coast (altitude venue) — sub-brand "Sol & Ora"
+  // Source: 1-ALTITUDE_COAST_2026_CALENDAR_2 (Image 2, Mar 26–Feb 27 fiscal calendar).
+  // Jan 27 + Feb 27 entries (Sunday Family Day, Valentine's Day) skipped per strict 2026 scope.
+  // Dropped per dedup: Let's Go Local (Aug 26 → in CAMPAIGNS), Christmas (in PUBLIC_HOLIDAYS),
+  // New Year's Eve (Dec 26 → in CAMPAIGNS as NYE Countdown).
+  {id:"vn-ac-2",name:"Easter Family Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-04-05",end:"2026-04-05",hook:"Easter long weekend",layer:"venue"},
+  {id:"vn-ac-3",name:"SG Restaurant Week (April)",venue:"altitude",subBrand:"Sol & Ora",month:3,undated:true,hook:"Singapore Restaurant Week",layer:"venue"},
+  {id:"vn-ac-4",name:"World Malbec Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-04-17",end:"2026-04-17",hook:"World Malbec Day",layer:"venue"},
+  {id:"vn-ac-5",name:"Mother's Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-05-10",end:"2026-05-10",hook:"Mother's Day",layer:"venue"},
+  {id:"vn-ac-6",name:"Father's Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-06-21",end:"2026-06-21",hook:"Father's Day",layer:"venue"},
+  {id:"vn-ac-7",name:"June School Holidays Family Day",venue:"altitude",subBrand:"Sol & Ora",month:5,undated:true,hook:"June school break",layer:"venue"},
+  {id:"vn-ac-8",name:"International Cheese Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-06-04",end:"2026-06-04",hook:"Int'l Cheese Day",layer:"venue"},
+  {id:"vn-ac-9",name:"Brunch Day Party",venue:"altitude",subBrand:"Sol & Ora",month:6,undated:true,hook:"Brunch hero",layer:"venue"},
+  {id:"vn-ac-10",name:"Wine & Cheese Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-07-25",end:"2026-07-25",hook:"Nat'l Wine & Cheese Day",layer:"venue"},
+  {id:"vn-ac-11",name:"Bastille Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-07-14",end:"2026-07-14",hook:"Bastille Day",layer:"venue"},
+  {id:"vn-ac-12",name:"Family Day (August)",venue:"altitude",subBrand:"Sol & Ora",month:7,undated:true,hook:"Family Day activation",layer:"venue"},
+  {id:"vn-ac-13",name:"Crypto-Week",venue:"altitude",subBrand:"Sol & Ora",month:8,undated:true,hook:"Token2049 / Crypto-week",layer:"venue"},
+  {id:"vn-ac-14",name:"GPSS (Singapore Grand Prix Singapore Spectacular)",venue:"altitude",subBrand:"Sol & Ora",start:"2026-10-09",end:"2026-10-11",hook:"F1 weekend",layer:"venue"},
+  {id:"vn-ac-15",name:"SG Restaurant Week (October)",venue:"altitude",subBrand:"Sol & Ora",month:9,undated:true,hook:"Singapore Restaurant Week",layer:"venue"},
+  {id:"vn-ac-16",name:"World Pasta Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-10-25",end:"2026-10-25",hook:"World Pasta Day",layer:"venue"},
+  {id:"vn-ac-17",name:"Spain's National Day",venue:"altitude",subBrand:"Sol & Ora",start:"2026-10-12",end:"2026-10-12",hook:"Spain's National Day",layer:"venue"},
+  {id:"vn-ac-18",name:"Family Day (November)",venue:"altitude",subBrand:"Sol & Ora",month:10,undated:true,hook:"Family Day activation",layer:"venue"},
 ];
 
 // ─── COLOURS ───
