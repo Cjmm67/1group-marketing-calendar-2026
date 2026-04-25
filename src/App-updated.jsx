@@ -840,6 +840,16 @@ export default function MarketingCalendar() {
 
   const filteredEvents = useMemo(() => {
     let evts = allEvents;
+    // Zone filter: when a specific venue is selected, hide venue-layer events
+    // (and custom events with a venue tag) that don't belong to that venue.
+    // Group-level events (campaigns, MICE, SG, visitor peaks) always show — they're context.
+    if (selectedZone !== "group") {
+      evts = evts.filter(e => {
+        if (e.layer === "venue") return e.venue === selectedZone;
+        if (e.id?.startsWith("custom-") && e.venue) return e.venue === selectedZone;
+        return true;
+      });
+    }
     if (search) {
       const s = search.toLowerCase();
       evts = evts.filter(e => e.name?.toLowerCase().includes(s) || e.cat?.toLowerCase().includes(s) || e.type?.toLowerCase().includes(s));
@@ -858,7 +868,7 @@ export default function MarketingCalendar() {
       });
     }
     return evts;
-  }, [allEvents, search, quarter]);
+  }, [allEvents, search, quarter, selectedZone]);
 
   const eventsByMonth = useMemo(() => {
     const map = {};
