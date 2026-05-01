@@ -2053,8 +2053,8 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
           </div>
         </div>
       )}
-      {/* Visitor intensity banner — gives at-a-glance market context for the month */}
-      {layers.visitor && (() => {
+      {/* Visitor intensity banner — gives at-a-glance market context for the month. Always visible when there's relevant data (independent of layer toggles). */}
+      {(() => {
         const monthPeaks = getVisitorPeaks(month);
         const monthHighs = VISITOR_DATA.filter(v => v.data[MONTH_SHORT[month]] === "High").map(v => v.market);
         if (monthPeaks.length === 0 && monthHighs.length === 0) return null;
@@ -2129,8 +2129,8 @@ function MonthView({ t, activeHC, month, setMonth, events, layers, onDetail }) {
                   {layers.hotcold && hc && (hc.rating === "cold-cold" || hc.rating === "cold") && <Snowflake className="w-2.5 h-2.5" style={{ color: LAYER_COLORS[hc.rating].primary }} />}
                 </div>
               </div>
-              {/* Public Holiday name — shown inside the cell, not just as an icon */}
-              {ph && layers.school && (
+              {/* Public Holiday name — shown inside the cell, not just as an icon. Always visible when there's a PH (independent of layer toggles). */}
+              {ph && (
                 <div
                   className={`px-1 py-0.5 mb-0.5 rounded truncate font-semibold leading-tight ${isDay ? "bg-amber-100 text-amber-800" : "bg-amber-900/40 text-amber-300"}`}
                   style={{ fontSize: "9px" }}
