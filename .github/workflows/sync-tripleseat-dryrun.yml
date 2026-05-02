@@ -1,0 +1,37 @@
+name: Sync Tripleseat (Dry Run)
+
+# DRY RUN MODE
+# - Calls Tripleseat API
+# - Runs the sanitiser
+# - Prints the would-be output to the Action log
+# - Does NOT commit, does NOT write to the repo, does NOT touch the calendar
+#
+# Trigger manually from the Actions tab to test.
+# Once outputs look clean across several runs, swap to sync-tripleseat.yml (live mode).
+
+on:
+  workflow_dispatch:        # Manual trigger only during dry-run phase
+  # schedule:
+  #   - cron: '0 22 * * 0'  # Sunday 22:00 UTC = Monday 06:00 SGT — enable later
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read        # Dry run only reads — no write permission needed
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Tripleseat sync (DRY RUN)
+        env:
+          TRIPLESEAT_CLIENT_ID:     ${{ secrets.TRIPLESEAT_CLIENT_ID }}
+          TRIPLESEAT_CLIENT_SECRET: ${{ secrets.TRIPLESEAT_CLIENT_SECRET }}
+          DRY_RUN: 'true'
+        run: node scripts/sync-tripleseat.js
