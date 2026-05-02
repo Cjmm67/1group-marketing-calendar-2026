@@ -1,0 +1,31 @@
+name: Sync Tripleseat (Mock — sanitiser test only)
+
+# MOCK MODE
+# - No Tripleseat API call
+# - No credentials needed
+# - Runs synthetic events with seeded sensitive data through the sanitiser
+# - Asserts no sensitive content survives, sets non-zero exit on any failure
+#
+# Use this to validate sanitiser correctness BEFORE Tripleseat credentials
+# are added, and as a regression test if the sanitiser is ever changed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run sanitiser mock test
+        run: node scripts/sync-tripleseat.mock.js
