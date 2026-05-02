@@ -2539,19 +2539,27 @@ function EventFormModal({ t, event, isPrefill, onSave, onClose }) {
 // ─── SIGN-IN PAGE ───
 
 function SignIn({ t, onSignIn }) {
-  const [mode, setMode] = useState("email"); // 'email' or 'venue'
+  const [mode, setMode] = useState("email"); // 'email' | 'venue' | 'otp'
   const [email, setEmail] = useState("");
   const [venueKey, setVenueKey] = useState("summerhouse");
   const [code, setCode] = useState("");
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  // OTP flow state
+  const [otpStep, setOtpStep] = useState("email"); // 'email' (request) | 'code' (enter received OTP)
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpChallenge, setOtpChallenge] = useState(null);
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpSentMsg, setOtpSentMsg] = useState(null);
+
   const handleEmail = () => {
     setErr(null);
     const u = authEmail(email);
     if (!u) {
       if (!email.toLowerCase().endsWith("@1-group.sg")) setErr("Only @1-group.sg email addresses are accepted.");
-      else setErr("This email is not on the access list. Contact Chris Millar or a Marketing admin.");
+      else setErr("This email is not on the access list. Try the Email OTP tab instead, or contact a Marketing admin.");
       return;
     }
     setBusy(true);
@@ -2567,6 +2575,84 @@ function SignIn({ t, onSignIn }) {
     }
     setBusy(true);
     onSignIn(u);
+  };
+
+  // OTP step 1: request a code
+  const handleOtpRequest = async () => {
+    setErr(null);
+    const trimmed = otpEmail.trim().toLowerCase();
+    if (!trimmed.endsWith("@1-group.sg")) {
+      setErr("Only @1-group.sg email addresses are accepted.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const resp = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setErr(data.error || "Could not send code. Please try again.");
+        return;
+      }
+      setOtpChallenge(data.challenge);
+      setOtpExpiresAt(data.expiresAt);
+      setOtpSentMsg(`Code sent to ${trimmed}. Check your inbox (and spam folder).`);
+      setOtpStep("code");
+    } catch (e) {
+      setErr("Network error. Please check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // OTP step 2: verify the code
+  const handleOtpVerify = async () => {
+    setErr(null);
+    if (!/^\d{6}$/.test(otpCode.trim())) {
+      setErr("Code must be 6 digits.");
+      return;
+    }
+    if (!otpChallenge) {
+      setErr("No active code request. Please request a new code.");
+      setOtpStep("email");
+      return;
+    }
+    setBusy(true);
+    try {
+      const resp = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: otpEmail.trim().toLowerCase(),
+          code: otpCode.trim(),
+          challenge: otpChallenge,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setErr(data.error || "Verification failed. Please try again.");
+        setBusy(false);
+        return;
+      }
+      // Optionally store session token for future server-side re-verification
+      try { localStorage.setItem("calendar-otp-session", data.sessionToken); } catch {}
+      onSignIn(data.user);
+    } catch (e) {
+      setErr("Network error. Please check your connection and try again.");
+      setBusy(false);
+    }
+  };
+
+  const resetOtp = () => {
+    setOtpStep("email");
+    setOtpCode("");
+    setOtpChallenge(null);
+    setOtpExpiresAt(null);
+    setOtpSentMsg(null);
+    setErr(null);
   };
 
   const onKey = (fn) => (e) => { if (e.key === "Enter") fn(); };
@@ -2589,26 +2675,32 @@ function SignIn({ t, onSignIn }) {
             <h2 className={`text-sm font-semibold ${t.textHead}`}>Sign in to continue</h2>
           </div>
 
-          {/* Mode toggle */}
+          {/* Mode toggle — three tabs */}
           <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-md">
             <button
               onClick={() => { setMode("email"); setErr(null); }}
-              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${mode === "email" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
+              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1 ${mode === "email" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
             >
-              <Shield className="w-3.5 h-3.5" /> 1-Group Employee
+              <Shield className="w-3.5 h-3.5" /> Admin
+            </button>
+            <button
+              onClick={() => { setMode("otp"); setErr(null); resetOtp(); }}
+              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1 ${mode === "otp" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
+            >
+              <KeyRound className="w-3.5 h-3.5" /> Email OTP
             </button>
             <button
               onClick={() => { setMode("venue"); setErr(null); }}
-              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${mode === "venue" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
+              className={`flex-1 text-xs py-1.5 rounded transition-all flex items-center justify-center gap-1 ${mode === "venue" ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600"}`}
             >
-              <Building2 className="w-3.5 h-3.5" /> Outlet Staff
+              <Building2 className="w-3.5 h-3.5" /> Outlet
             </button>
           </div>
 
-          {mode === "email" ? (
+          {mode === "email" && (
             <>
               <p className={`text-xs ${t.textMuted} mb-3 leading-relaxed`}>
-                For all <strong>admins</strong> (Leadership, Marketing, Sales) and <strong>staff</strong> (Operations, Culinary). Your role is assigned automatically from your email address.
+                For <strong>admins</strong> on the access list (Leadership, Marketing, Sales, Operations, Culinary). Your role is assigned automatically from your email address.
               </p>
               <label className={`text-xs ${t.textMuted} block mb-1`}>1-Group email address</label>
               <input
@@ -2628,13 +2720,83 @@ function SignIn({ t, onSignIn }) {
                 <Shield className="w-4 h-4" /> Sign in
               </button>
               <p className={`text-xs ${t.textDim} mt-3 text-center`}>
-                Not on the list? Contact Chris Millar or a Marketing admin.
+                Not on the admin list? Use the <strong>Email OTP</strong> tab to sign in as a viewer.
               </p>
             </>
-          ) : (
+          )}
+
+          {mode === "otp" && (
             <>
               <p className={`text-xs ${t.textMuted} mb-3 leading-relaxed`}>
-                For outlet-based team members without a 1-Group email. The Marketing team will share a code for your outlet.
+                For all <strong>1-Group staff</strong> with a <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">@1-group.sg</code> email. We'll send a one-time code to your inbox. Read-only access to all venues.
+              </p>
+
+              {otpStep === "email" ? (
+                <>
+                  <label className={`text-xs ${t.textMuted} block mb-1`}>Your 1-Group email</label>
+                  <input
+                    type="email"
+                    value={otpEmail}
+                    onChange={e => setOtpEmail(e.target.value)}
+                    onKeyDown={onKey(handleOtpRequest)}
+                    placeholder="firstname.lastname@1-group.sg"
+                    autoFocus
+                    disabled={busy}
+                    className={`w-full ${t.input} border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 mb-3`}
+                  />
+                  <button
+                    onClick={handleOtpRequest}
+                    disabled={busy || !otpEmail.trim()}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm py-2 rounded-md font-medium flex items-center justify-center gap-2"
+                  >
+                    <KeyRound className="w-4 h-4" /> {busy ? "Sending…" : "Send sign-in code"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {otpSentMsg && (
+                    <div className="mb-3 flex items-start gap-2 p-2.5 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                      <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>{otpSentMsg}</span>
+                    </div>
+                  )}
+                  <label className={`text-xs ${t.textMuted} block mb-1`}>6-digit code from your email</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={onKey(handleOtpVerify)}
+                    placeholder="123456"
+                    autoFocus
+                    disabled={busy}
+                    className={`w-full ${t.input} border rounded-md px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:border-emerald-500 mb-3`}
+                  />
+                  <button
+                    onClick={handleOtpVerify}
+                    disabled={busy || otpCode.length !== 6}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm py-2 rounded-md font-medium flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-4 h-4" /> {busy ? "Verifying…" : "Verify and sign in"}
+                  </button>
+                  <button
+                    onClick={resetOtp}
+                    disabled={busy}
+                    className={`w-full text-xs ${t.textMuted} hover:${t.textBody} mt-2 underline-offset-2 hover:underline`}
+                  >
+                    Use a different email
+                  </button>
+                </>
+              )}
+            </>
+          )}
+
+          {mode === "venue" && (
+            <>
+              <p className={`text-xs ${t.textMuted} mb-3 leading-relaxed`}>
+                For outlet-based team members <strong>without</strong> a 1-Group email. The Marketing team will share a code for your outlet.
               </p>
               <label className={`text-xs ${t.textMuted} block mb-1`}>Your outlet</label>
               <select
