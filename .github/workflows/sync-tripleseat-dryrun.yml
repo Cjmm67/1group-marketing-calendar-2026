@@ -34,4 +34,4 @@ jobs:
           TRIPLESEAT_CLIENT_ID:     ${{ secrets.TRIPLESEAT_CLIENT_ID }}
           TRIPLESEAT_CLIENT_SECRET: ${{ secrets.TRIPLESEAT_CLIENT_SECRET }}
           DRY_RUN: 'true'
-        run: node scripts/sync-tripleseat.js
+        run: node scripts/sync-tripleseat.cjs
