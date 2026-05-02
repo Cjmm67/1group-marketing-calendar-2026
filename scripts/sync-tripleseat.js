@@ -278,7 +278,17 @@ async function main() {
   console.log(`✓ Wrote ${outPath} (${sanitised.length} events)`);
 }
 
-main().catch((err) => {
-  console.error('SYNC FAILED:', err.message);
-  process.exit(1);
-});
+// Export for testing / mock runs (sync-tripleseat.mock.js)
+module.exports = {
+  sanitiseEvent,
+  SENSITIVE_KEY_PATTERNS,
+  VENUE_MAP,
+};
+
+// Only run main() when invoked directly, not when require()'d by the mock
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('SYNC FAILED:', err.message);
+    process.exit(1);
+  });
+}
